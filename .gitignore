@@ -8,3 +8,4 @@ dependencies.lock
 relay/config.php
 relay/log/*.log
 .superpowers/
+tests/host/build/

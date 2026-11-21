@@ -1,0 +1,80 @@
+menu "Air Alert"
+
+    menu "Wi-Fi and admin"
+        config AA_WIFI_SSID
+            string "Default Wi-Fi SSID (empty = start setup AP)"
+            default ""
+        config AA_WIFI_PASS
+            string "Default Wi-Fi password"
+            default ""
+        config AA_AP_PASS
+            string "Setup AP password (min 8 chars)"
+            default "airalert1"
+        config AA_ADMIN_PASS
+            string "Admin page password (user: admin)"
+            default "admin"
+    endmenu
+
+    menu "MQTT"
+        config AA_MQTT_URI
+            string "Broker URI"
+            default "mqtts://b351d3df.ala.eu-central-1.emqxsl.com:8883"
+        config AA_MQTT_USER
+            string "Broker username"
+            default ""
+        config AA_MQTT_PASS
+            string "Broker password"
+            default ""
+        config AA_MQTT_TOPIC
+            string "Alert state topic"
+            default "air_alert/kyiv/state"
+        config AA_BROKER_LOST_SEC
+            int "Seconds without broker before LED shows connection loss"
+            default 60
+        config AA_STALE_ALERT_SEC
+            int "Retained alert older than this (s) is stale: LED only, no siren"
+            default 10800
+    endmenu
+
+    menu "Pins"
+        config AA_LED_GPIO
+            int "Status LED GPIO (active-low)"
+            default 8
+        config AA_BUTTON_GPIO
+            int "BOOT button GPIO: stop sound / hold at boot to reset"
+            default 9
+        config AA_BTN_ALERT_GPIO
+            int "Local 'alert' button GPIO (active-low)"
+            default 3
+        config AA_BTN_CLEAR_GPIO
+            int "Local 'clear' button GPIO (active-low)"
+            default 4
+        config AA_DF_UART
+            int "DFPlayer UART port"
+            default 1
+        config AA_DF_TX_GPIO
+            int "ESP TX -> DFPlayer RX GPIO"
+            default 1
+        config AA_DF_RX_GPIO
+            int "ESP RX <- DFPlayer TX GPIO"
+            default 0
+    endmenu
+
+    menu "Sound and behaviour"
+        config AA_DF_VOLUME
+            int "DFPlayer volume"
+            range 0 30
+            default 25
+        config AA_SIREN_REPEATS
+            int "Siren repeats on RED"
+            range 1 10
+            default 1
+        config AA_SILENCE_ENABLE
+            bool "Play minute of silence daily at 09:00 Kyiv"
+            default y
+        config AA_RESET_HOLD_MS
+            int "Hold BOOT at power-up this long (ms) to erase settings"
+            default 5000
+    endmenu
+
+endmenu
