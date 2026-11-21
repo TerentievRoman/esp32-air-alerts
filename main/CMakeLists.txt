@@ -1,4 +1,4 @@
-idf_component_register(SRCS "screen_fmt.c" "font5x8.c" "main.c"
+idf_component_register(SRCS "main.c"
                             "admin.c" "admin_form.c" "dns_server.c"
                             "alert_log.c" "alert_log_buf.c" "alert_state.c"
                             "button.c" "button_gesture.c" "clock.c" "clock_calc.c"
