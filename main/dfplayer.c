@@ -187,6 +187,6 @@ bool dfplayer_wait_finished(uint32_t timeout_ms)
             break;
         }
     }
-    ESP_LOGW(TAG, "timeout waiting for track end");
+    ESP_LOGD(TAG, "timeout waiting for track end");
     return false;
 }

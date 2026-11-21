@@ -28,7 +28,7 @@ static const char ADMIN_HTML[] =
 "<button type=\"submit\">Зберегти і перезавантажити</button></form>"
 "<h2>Перевірка звуку</h2>"
 "<button onclick=\"t(1)\">Тест: тривога</button><button onclick=\"t(2)\">Тест: відбій</button>"
-"<button onclick=\"t(3)\">Тест: 09:00</button>"
+"<button onclick=\"t(3)\">Тест: 09:00</button> <small id=\"tr\"></small>"
 "<h2>Скидання</h2>"
 "<button class=\"warn\" onclick=\"rst()\">Скинути налаштування</button>"
 "<script>"
@@ -38,7 +38,7 @@ static const char ADMIN_HTML[] =
 "'Стан: <span class=\"'+s.state+'\">'+(N[s.state]||s.state)+'</span><br>Wi-Fi: '+yn(s.wifi)+"
 "' · MQTT: '+yn(s.mqtt)+' · Час: '+yn(s.time_synced)+'<br><small>Пристрій '+s.id+'</small>'}).catch(()=>{})}"
 "fetch('/config').then(r=>r.json()).then(c=>{for(const k in c){const e=document.getElementById(k);if(e)e.value=c[k]}}).catch(()=>{});"
-"function t(n){fetch('/test?track='+n,{method:'POST'})}"
+"function t(n){const e=document.getElementById('tr');e.textContent='…';fetch('/test?track='+n,{method:'POST'}).then(r=>{e.textContent=r.ok?'Надіслано: трек '+n:'Помилка '+r.status}).catch(()=>{e.textContent='Немає зв\\'язку'})}"
 "function rst(){if(confirm('Стерти всі налаштування і перезавантажити?'))fetch('/reset',{method:'POST'}).then(()=>alert('Скинуто'))}"
 "st();setInterval(st,5000);"
 "</script></body></html>";
