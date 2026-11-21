@@ -16,6 +16,7 @@ SRCS_test_clock := $(MAIN)/clock_calc.c
 SRCS_test_notify_rules := $(MAIN)/notify_rules.c
 SRCS_test_alert_log_buf := $(MAIN)/alert_log_buf.c
 SRCS_test_button_gesture := $(MAIN)/button_gesture.c
+SRCS_test_font5x8 := $(MAIN)/font5x8.c
 
 .PHONY: test clean
 test: $(addprefix $(BUILD)/,$(TESTS))
