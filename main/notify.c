@@ -5,6 +5,7 @@
 #include "freertos/queue.h"
 #include "freertos/task.h"
 #include "esp_log.h"
+#include "esp_timer.h"
 #include "sdkconfig.h"
 
 #include "alert_state.h"
@@ -12,11 +13,11 @@
 #include "clock.h"
 #include "dfplayer.h"
 #include "led.h"
+#include "mqtt.h"
+#include "notify_rules.h"
 
 static const char *TAG = "notify";
 
-#define TRACK_ALERT   1
-#define TRACK_CLEAR   2
 #define TRACK_MAX     3
 #define POLL_MS       200
 /* DFPlayer may not report track end (e.g. its TX line is not wired): cap each play. */
@@ -28,12 +29,15 @@ typedef struct {
     cmd_type_t type;
     int track;              /* CMD_PLAY */
     int repeats;            /* CMD_PLAY */
+    alert_state_t old_state; /* CMD_TRANSITION */
     alert_state_t state;    /* CMD_TRANSITION */
     bool stale;             /* CMD_TRANSITION */
     button_id_t button;     /* CMD_BUTTON */
 } cmd_t;
 
 static QueueHandle_t s_q;
+static led_pattern_t s_base = LED_OFF; /* LED pattern of the current alert state */
+static bool s_broker_lost;
 static volatile bool s_stop_req;
 
 /* --- producers (any context) --- */
@@ -57,8 +61,7 @@ void notify_stop(void)
 
 static void on_state_change(alert_state_t old_state, alert_state_t new_state, bool stale)
 {
-    (void)old_state;
-    post(&(cmd_t){ .type = CMD_TRANSITION, .state = new_state, .stale = stale });
+    post(&(cmd_t){ .type = CMD_TRANSITION, .old_state = old_state, .state = new_state, .stale = stale });
 }
 
 /* Runs in the esp_timer task: only flag / enqueue. */
@@ -118,23 +121,31 @@ static void handle_button(button_id_t id)
     if (!alert_state_apply(&m, now)) ESP_LOGI(TAG, "already %s", alert_state_name(m.state));
 }
 
-static void handle_transition(alert_state_t s, bool stale)
+static void handle_transition(alert_state_t old_state, alert_state_t s, bool stale)
 {
-    led_set(pattern_for(s));
-    switch (s) {
-    case ALERT_STATE_RED:
-        if (stale) ESP_LOGW(TAG, "RED is stale: LED only, no siren");
-        else play(TRACK_ALERT, CONFIG_AA_SIREN_REPEATS);
-        break;
-    case ALERT_STATE_YELLOW:
-        play(TRACK_ALERT, 1);
-        break;
-    case ALERT_STATE_CLEAR:
-        play(TRACK_CLEAR, 1);
-        break;
-    default:
-        break;
+    s_base = pattern_for(s);
+    led_set(s_base);
+    int track = notify_track_for(old_state, s, stale);
+    if (track == 0) {
+        ESP_LOGI(TAG, "%s -> %s: silent%s", alert_state_name(old_state), alert_state_name(s),
+                 stale ? " (stale)" : "");
+        return;
     }
+    play(track, s == ALERT_STATE_RED ? CONFIG_AA_SIREN_REPEATS : 1);
+}
+
+/* Idle tick (nothing playing): slow blink while the broker is unreachable
+ * for longer than CONFIG_AA_BROKER_LOST_SEC. Only touches the LED on change,
+ * so patterns set elsewhere (setup AP, DFPlayer error) are kept. */
+static void check_broker(void)
+{
+    int64_t since = mqtt_disconnected_since();
+    int64_t up = esp_timer_get_time() / 1000000;
+    bool lost = since > 0 && up - since > CONFIG_AA_BROKER_LOST_SEC;
+    if (lost == s_broker_lost) return;
+    s_broker_lost = lost;
+    ESP_LOGW(TAG, "%s", lost ? "broker unreachable" : "broker back");
+    led_set(lost ? LED_BLINK_0_5HZ : s_base);
 }
 
 static void notify_task(void *arg)
@@ -155,13 +166,13 @@ static void notify_task(void *arg)
     cmd_t c;
     for (;;) {
         if (xQueueReceive(s_q, &c, pdMS_TO_TICKS(1000)) != pdTRUE) {
-            /* TODO Task 7: broker-lost LED (mqtt_disconnected_since). */
+            check_broker();
             continue;
         }
         switch (c.type) {
         case CMD_PLAY:       play(c.track, c.repeats); break;
         case CMD_STOP:       dfplayer_stop(); break;
-        case CMD_TRANSITION: handle_transition(c.state, c.stale); break;
+        case CMD_TRANSITION: handle_transition(c.old_state, c.state, c.stale); break;
         case CMD_BUTTON:     handle_button(c.button); break;
         }
     }

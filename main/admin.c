@@ -14,6 +14,7 @@
 #include "admin_page.h"
 #include "alert_state.h"
 #include "clock.h"
+#include "mqtt.h"
 #include "notify.h"
 #include "wifi.h"
 
@@ -95,7 +96,7 @@ static esp_err_t h_status(httpd_req_t *req)
     cJSON *o = cJSON_CreateObject();
     cJSON_AddStringToObject(o, "state", alert_state_name(alert_state_get()));
     cJSON_AddBoolToObject(o, "wifi", wifi_is_connected());
-    cJSON_AddBoolToObject(o, "mqtt", false);        /* mqtt module: Task 7 */
+    cJSON_AddBoolToObject(o, "mqtt", mqtt_is_connected());
     cJSON_AddBoolToObject(o, "time_synced", clock_is_synced());
     cJSON_AddStringToObject(o, "id", id);
     return send_json(req, o);
