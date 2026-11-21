@@ -43,6 +43,7 @@ static QueueHandle_t s_q;
 static led_pattern_t s_base = LED_OFF; /* LED pattern of the current alert state */
 static bool s_broker_lost;
 static volatile bool s_stop_req;
+static volatile bool s_playing;
 
 /* --- producers (any context) --- */
 
@@ -79,8 +80,17 @@ static void on_state_change(alert_state_t old_state, alert_state_t new_state, bo
 /* Runs in the esp_timer task: only flag / enqueue. */
 static void on_button(button_id_t id)
 {
-    if (id == BTN_STOP) s_stop_req = true;
-    post(&(cmd_t){ .type = CMD_BUTTON, .button = id });
+    switch (notify_button_action(id, s_playing)) {
+    case BTN_ACTION_STOP:
+        s_stop_req = true;
+        break;
+    case BTN_ACTION_ALERT:
+    case BTN_ACTION_CLEAR:
+        post(&(cmd_t){ .type = CMD_BUTTON, .button = id });
+        break;
+    default:
+        break;
+    }
 }
 
 /* --- notify task --- */
@@ -99,7 +109,16 @@ static void handle_apply(const alert_msg_t *m);
 
 /* Play a track `repeats` times. Returns early on BOOT/stop or when another
  * command is waiting (it preempts the current sound). */
+static void play_body(int track, int repeats);
+
 static void play(int track, int repeats)
+{
+    s_playing = true;
+    play_body(track, repeats);
+    s_playing = false;
+}
+
+static void play_body(int track, int repeats)
 {
     s_stop_req = false;
     for (int r = 0; r < repeats; r++) {
@@ -137,7 +156,7 @@ static void handle_button(button_id_t id)
     switch (id) {
     case BTN_ALERT: m.state = ALERT_STATE_RED;   break;
     case BTN_CLEAR: m.state = ALERT_STATE_CLEAR; break;
-    default: return; /* BTN_STOP handled via s_stop_req */
+    default: return; /* stop is handled via s_stop_req */
     }
     ESP_LOGI(TAG, "local button -> %s", alert_state_name(m.state));
     if (!alert_state_apply(&m, now)) ESP_LOGI(TAG, "already %s", alert_state_name(m.state));

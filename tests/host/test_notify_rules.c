@@ -24,8 +24,20 @@ TEST(to_unknown_silent) {
     ASSERT_EQ_INT(notify_track_for(ALERT_STATE_RED, ALERT_STATE_UNKNOWN, false), 0);
 }
 
+TEST(any_gesture_while_playing_only_stops) {
+    ASSERT_EQ_INT(notify_button_action(BTN_STOP, true), BTN_ACTION_STOP);
+    ASSERT_EQ_INT(notify_button_action(BTN_ALERT, true), BTN_ACTION_STOP);
+    ASSERT_EQ_INT(notify_button_action(BTN_CLEAR, true), BTN_ACTION_STOP);
+}
+TEST(gestures_when_silent) {
+    ASSERT_EQ_INT(notify_button_action(BTN_STOP, false), BTN_ACTION_NONE);
+    ASSERT_EQ_INT(notify_button_action(BTN_ALERT, false), BTN_ACTION_ALERT);
+    ASSERT_EQ_INT(notify_button_action(BTN_CLEAR, false), BTN_ACTION_CLEAR);
+}
+
 int main(void) {
     RUN(boot_into_clear_is_silent); RUN(real_clear_plays_track2); RUN(red_plays_siren);
     RUN(stale_red_silent); RUN(yellow_plays_siren); RUN(stale_yellow_silent); RUN(to_unknown_silent);
+    RUN(any_gesture_while_playing_only_stops); RUN(gestures_when_silent);
     return MT_RESULT();
 }
