@@ -33,8 +33,9 @@
    деплоймент `air-alert`, Access Control → Authentication → користувач
    `relay`. Записати host (`xxxxxxxx.ala.eu-central-1.emqxsl.com`), port
    8883, логін, пароль. Spend Limit тримати 0, щоб ніколи не було списань.
-2. Залити теку `relay/` на хостинг як `public_html/air_alert/`
-   (без `tests/`, без `config.php` з локальної машини).
+2. Залити теку `relay/` на хостинг (без `tests/`). Робоче розгортання:
+   корінь піддомену `https://alerts.yomochka.pp.ua/`, тому далі в прикладах
+   `https://<домен>/air_alert/...` читати як `https://alerts.yomochka.pp.ua/...`.
 3. На хостингу скопіювати `config.example.php` → `config.php`, вписати
    брокер і секрет. Секрет згенерувати:
    ```bash
