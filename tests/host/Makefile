@@ -12,6 +12,7 @@ TESTS   := $(patsubst %.c,%,$(wildcard test_*.c))
 # SRCS_test_alert_state := $(MAIN)/alert_state.c $(CJSON)/cJSON.c
 SRCS_test_alert_state := $(MAIN)/alert_state.c $(CJSON)/cJSON.c
 SRCS_test_admin_form := $(MAIN)/admin_form.c
+SRCS_test_clock := $(MAIN)/clock_calc.c
 
 .PHONY: test clean
 test: $(addprefix $(BUILD)/,$(TESTS))

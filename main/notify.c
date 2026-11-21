@@ -9,6 +9,7 @@
 
 #include "alert_state.h"
 #include "button.h"
+#include "clock.h"
 #include "dfplayer.h"
 #include "led.h"
 
@@ -106,14 +107,15 @@ static void play(int track, int repeats)
 static void handle_button(button_id_t id)
 {
     /* Local buttons take the same path as MQTT: through alert_state_apply. */
-    alert_msg_t m = { .ts = 0 }; /* TODO Task 6: clock_now() */
+    int64_t now = clock_now();
+    alert_msg_t m = { .ts = now };
     switch (id) {
     case BTN_ALERT: m.state = ALERT_STATE_RED;   break;
     case BTN_CLEAR: m.state = ALERT_STATE_CLEAR; break;
     default: return; /* BTN_STOP handled via s_stop_req */
     }
     ESP_LOGI(TAG, "local button -> %s", alert_state_name(m.state));
-    if (!alert_state_apply(&m, 0)) ESP_LOGI(TAG, "already %s", alert_state_name(m.state));
+    if (!alert_state_apply(&m, now)) ESP_LOGI(TAG, "already %s", alert_state_name(m.state));
 }
 
 static void handle_transition(alert_state_t s, bool stale)
