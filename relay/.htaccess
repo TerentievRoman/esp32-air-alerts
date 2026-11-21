@@ -1,5 +1,11 @@
-# Закрити прямий доступ до конфігу, логів і тестів.
-<FilesMatch "^(config(\.example)?\.php|mqtt_publish\.php|map\.php)$">
-    Require all denied
+# Закрити прямий доступ до конфігу, бібліотек, логів і тестів.
+# Працює і на Apache 2.4 (mod_authz_core), і на 2.2 (mod_authz_host).
+<FilesMatch "^(config(\.example)?\.php|mqtt_publish\.php|map\.php|hook_lib\.php)$|\.log$">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order allow,deny
+        Deny from all
+    </IfModule>
 </FilesMatch>
-RedirectMatch 403 ^/.*/(log|tests)/

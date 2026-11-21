@@ -16,3 +16,7 @@ expect(map_payload_to_state(['event' => '0']), 'CLEAR', 'рядкове 0 → CL
 expect(map_payload_to_state(['action' => 'тривога']), 'RED', 'тривога → RED');
 expect(map_payload_to_state(['alertType' => 'відбій']), 'CLEAR', 'відбій → CLEAR');
 expect(map_payload_to_state(['isActive' => true, 'status' => 'end']), 'CLEAR', 'явне поле status має пріоритет над isActive');
+
+// Без mbstring кирилиця має працювати через фолбек.
+expect(map_lower_fallback('ТРИВОГА Start'), 'тривога start', 'fallback lowercases Cyrillic and Latin');
+expect(map_lower('ВІДБІЙ'), 'відбій', 'map_lower handles Cyrillic');

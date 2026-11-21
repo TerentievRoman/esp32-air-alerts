@@ -72,16 +72,18 @@ function mqtt_read_packet($sock): ?array
     }
     $len = 0;
     $mult = 1;
-    for ($i = 0; $i < 4; $i++) {
+    $more = true;
+    for ($i = 0; $i < 4 && $more; $i++) {
         $b = mqtt_read_exact($sock, 1);
         if ($b === null) {
             return null;
         }
         $len += (ord($b) & 0x7f) * $mult;
-        if ((ord($b) & 0x80) === 0) {
-            break;
-        }
+        $more = (ord($b) & 0x80) !== 0;
         $mult *= 128;
+    }
+    if ($more) {
+        return null; // Remaining Length довша за 4 байти: не MQTT
     }
     $body = $len > 0 ? mqtt_read_exact($sock, $len) : '';
     if ($body === null) {
@@ -111,7 +113,11 @@ function mqtt_publish(array $cfg, string $topic, string $payload, bool $retain =
         'SNI_enabled' => true,
     ]]);
     $addr = ($tls ? 'tls://' : 'tcp://') . $host . ':' . $port;
+    // TLS-рукостискання орієнтується на default_socket_timeout, а не на $timeout.
+    $prevSocketTimeout = ini_get('default_socket_timeout');
+    ini_set('default_socket_timeout', (string)$timeout);
     $sock = @stream_socket_client($addr, $errno, $errstr, $timeout, STREAM_CLIENT_CONNECT, $ctx);
+    ini_set('default_socket_timeout', (string)$prevSocketTimeout);
     if ($sock === false) {
         error_log("mqtt_publish: connect to $addr failed: [$errno] $errstr");
         return false;

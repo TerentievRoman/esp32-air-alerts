@@ -15,6 +15,22 @@ const MAP_RED = ['start', 'started', 'alert', 'active', 'on', '1', 'true', 'тр
 const MAP_CLEAR = ['end', 'ended', 'clear', 'inactive', 'off', '0', 'false', 'відбій', 'кінець', 'green'];
 const MAP_YELLOW = ['yellow', 'warning', 'attention', 'увага'];
 
+/** Нижній регістр для латиниці та кирилиці без mbstring. */
+function map_lower_fallback(string $s): string
+{
+    static $upper = null, $lower = null;
+    if ($upper === null) {
+        $upper = preg_split('//u', 'АБВГҐДЕЄЖЗИІЇЙКЛМНОПРСТУФХЦЧШЩЬЮЯЁЪЫЭ', -1, PREG_SPLIT_NO_EMPTY);
+        $lower = preg_split('//u', 'абвгґдеєжзиіїйклмнопрстуфхцчшщьюяёъыэ', -1, PREG_SPLIT_NO_EMPTY);
+    }
+    return str_replace($upper, $lower, strtolower($s));
+}
+
+function map_lower(string $s): string
+{
+    return function_exists('mb_strtolower') ? mb_strtolower($s, 'UTF-8') : map_lower_fallback($s);
+}
+
 function map_value_to_state($value): ?string
 {
     if (is_bool($value)) {
@@ -23,7 +39,7 @@ function map_value_to_state($value): ?string
     if (!is_scalar($value)) {
         return null;
     }
-    $v = mb_strtolower(trim((string)$value));
+    $v = map_lower(trim((string)$value));
     if (in_array($v, MAP_RED, true)) {
         return 'RED';
     }
@@ -40,7 +56,7 @@ function map_payload_to_state(array $payload): ?string
 {
     $lower = [];
     foreach ($payload as $k => $v) {
-        $lower[mb_strtolower((string)$k)] = $v;
+        $lower[map_lower((string)$k)] = $v;
     }
     foreach (MAP_STATE_FIELDS as $field) {
         if (array_key_exists($field, $lower)) {
