@@ -10,6 +10,7 @@ TESTS   := $(patsubst %.c,%,$(wildcard test_*.c))
 
 # Per-test production sources (added by later tasks), e.g.
 # SRCS_test_alert_state := $(MAIN)/alert_state.c $(CJSON)/cJSON.c
+SRCS_test_alert_state := $(MAIN)/alert_state.c $(CJSON)/cJSON.c
 
 .PHONY: test clean
 test: $(addprefix $(BUILD)/,$(TESTS))
