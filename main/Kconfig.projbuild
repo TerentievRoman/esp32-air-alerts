@@ -41,14 +41,8 @@ menu "Air Alert"
             int "Status LED GPIO (active-low)"
             default 8
         config AA_BUTTON_GPIO
-            int "BOOT button GPIO: stop sound / hold at boot to reset"
+            int "BOOT button GPIO: short=stop, double=alert, hold 2 s=clear, hold at boot=reset"
             default 9
-        config AA_BTN_ALERT_GPIO
-            int "Local 'alert' button GPIO (active-low)"
-            default 3
-        config AA_BTN_CLEAR_GPIO
-            int "Local 'clear' button GPIO (active-low)"
-            default 4
         config AA_DF_UART
             int "DFPlayer UART port"
             default 1

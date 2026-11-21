@@ -88,6 +88,8 @@ static led_pattern_t pattern_for(alert_state_t s)
     }
 }
 
+static void handle_button(button_id_t id);
+
 /* Play a track `repeats` times. Returns early on BOOT/stop or when another
  * command is waiting (it preempts the current sound). */
 static void play(int track, int repeats)
@@ -104,11 +106,17 @@ static void play(int track, int repeats)
                 return;
             }
             cmd_t next;
-            if (xQueuePeek(s_q, &next, 0) == pdTRUE && next.type != CMD_BUTTON) {
-                ESP_LOGI(TAG, "preempted");
-                dfplayer_stop();
-                return;
+            if (xQueuePeek(s_q, &next, 0) != pdTRUE) continue;
+            if (next.type == CMD_BUTTON) {
+                /* Handle now: a state change posts a TRANSITION that preempts
+                 * on the next poll; a repeat of the current state does nothing. */
+                xQueueReceive(s_q, &next, 0);
+                handle_button(next.button);
+                continue;
             }
+            ESP_LOGI(TAG, "preempted");
+            dfplayer_stop();
+            return;
         }
     }
 }
