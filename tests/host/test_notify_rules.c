@@ -35,9 +35,42 @@ TEST(gestures_when_silent) {
     ASSERT_EQ_INT(notify_button_action(BTN_CLEAR, false), BTN_ACTION_CLEAR);
 }
 
+TEST(alert_interrupted_only_by_clear) {
+    ASSERT_TRUE(notify_can_preempt(1, 2));
+    ASSERT_TRUE(!notify_can_preempt(1, 1));
+    ASSERT_TRUE(!notify_can_preempt(1, 3));
+}
+TEST(clear_interrupted_only_by_alert) {
+    ASSERT_TRUE(notify_can_preempt(2, 1));
+    ASSERT_TRUE(!notify_can_preempt(2, 2));
+    ASSERT_TRUE(!notify_can_preempt(2, 3));
+}
+TEST(anthem_interrupted_only_by_alert) {
+    ASSERT_TRUE(notify_can_preempt(3, 1));
+    ASSERT_TRUE(!notify_can_preempt(3, 2));
+    ASSERT_TRUE(!notify_can_preempt(3, 3));
+}
+
+TEST(clear_during_anthem_is_deferred) {
+    ASSERT_EQ_INT(notify_sound_decision(3, 2), SOUND_DEFER);
+}
+TEST(anthem_during_alert_is_deferred) {
+    ASSERT_EQ_INT(notify_sound_decision(1, 3), SOUND_DEFER);
+}
+TEST(alert_during_anthem_interrupts) {
+    ASSERT_EQ_INT(notify_sound_decision(3, 1), SOUND_INTERRUPT);
+}
+TEST(same_track_is_ignored) {
+    ASSERT_EQ_INT(notify_sound_decision(1, 1), SOUND_IGNORE);
+    ASSERT_EQ_INT(notify_sound_decision(3, 3), SOUND_IGNORE);
+}
+
 int main(void) {
     RUN(boot_into_clear_is_silent); RUN(real_clear_plays_track2); RUN(red_plays_siren);
     RUN(stale_red_silent); RUN(yellow_plays_siren); RUN(stale_yellow_silent); RUN(to_unknown_silent);
     RUN(any_gesture_while_playing_only_stops); RUN(gestures_when_silent);
+    RUN(alert_interrupted_only_by_clear); RUN(clear_interrupted_only_by_alert); RUN(anthem_interrupted_only_by_alert);
+    RUN(clear_during_anthem_is_deferred); RUN(anthem_during_alert_is_deferred);
+    RUN(alert_during_anthem_interrupts); RUN(same_track_is_ignored);
     return MT_RESULT();
 }

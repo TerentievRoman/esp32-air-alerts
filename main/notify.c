@@ -106,9 +106,15 @@ static led_pattern_t pattern_for(alert_state_t s)
 
 static void handle_button(button_id_t id);
 static void handle_apply(const alert_msg_t *m);
+static int transition_effects(const cmd_t *c, int *repeats);
 
-/* Play a track `repeats` times. Returns early on BOOT/stop or when another
- * command is waiting (it preempts the current sound). */
+/* Sound that interrupted the previous one: played next by the task loop. */
+static cmd_t s_next;
+static bool s_have_next;
+
+/* Play a track `repeats` times. Returns early on BOOT/stop, or when a new
+ * sound may interrupt this one (notify_can_preempt); it is then queued in
+ * s_next. Other commands are handled while playing. */
 static void play_body(int track, int repeats);
 
 static void play(int track, int repeats)
@@ -121,30 +127,65 @@ static void play(int track, int repeats)
 static void play_body(int track, int repeats)
 {
     s_stop_req = false;
+    cmd_t deferred = { 0 };
+    bool has_deferred = false;   /* last sound that may not interrupt this one */
     for (int r = 0; r < repeats; r++) {
         ESP_LOGI(TAG, "play track %d (%d/%d)", track, r + 1, repeats);
         dfplayer_play_track(track);
         for (int waited = 0; waited < TRACK_MAX_MS; waited += POLL_MS) {
             if (dfplayer_wait_finished(POLL_MS)) break;
             if (s_stop_req) {
-                ESP_LOGI(TAG, "stopped by button");
+                ESP_LOGI(TAG, "stopped by button%s", has_deferred ? ", deferred sound dropped" : "");
                 dfplayer_stop();
                 return;
             }
             cmd_t next;
-            if (xQueuePeek(s_q, &next, 0) != pdTRUE) continue;
-            if (next.type == CMD_BUTTON || next.type == CMD_APPLY) {
-                /* Handle now: a state change posts a TRANSITION that preempts
-                 * on the next poll; a repeat of the current state does nothing. */
-                xQueueReceive(s_q, &next, 0);
-                if (next.type == CMD_BUTTON) handle_button(next.button);
-                else handle_apply(&next.msg);
+            if (xQueueReceive(s_q, &next, 0) != pdTRUE) continue;
+
+            int next_track = 0, next_repeats = 1;
+            switch (next.type) {
+            case CMD_BUTTON: handle_button(next.button); continue;
+            case CMD_APPLY:  handle_apply(&next.msg);    continue;
+            case CMD_STOP:
+                dfplayer_stop();
+                return;
+            case CMD_TRANSITION:
+                /* State, LED and log always follow; only the sound is subject
+                 * to the interruption rules. */
+                next_track = transition_effects(&next, &next_repeats);
+                break;
+            case CMD_PLAY:
+                next_track = next.track;
+                next_repeats = next.repeats;
+                break;
+            }
+            if (next_track == 0) {
+                /* A newer silent transition cancels a deferred sound. */
+                if (next.type == CMD_TRANSITION) has_deferred = false;
                 continue;
             }
-            ESP_LOGI(TAG, "preempted");
+            switch (notify_sound_decision(track, next_track)) {
+            case SOUND_IGNORE:
+                has_deferred = false;   /* state went back to what is playing */
+                continue;
+            case SOUND_DEFER:
+                ESP_LOGI(TAG, "track %d after track %d", next_track, track);
+                deferred = (cmd_t){ .type = CMD_PLAY, .track = next_track, .repeats = next_repeats };
+                has_deferred = true;
+                continue;
+            case SOUND_INTERRUPT:
+                break;
+            }
+            ESP_LOGI(TAG, "track %d interrupts track %d", next_track, track);
             dfplayer_stop();
+            s_next = (cmd_t){ .type = CMD_PLAY, .track = next_track, .repeats = next_repeats };
+            s_have_next = true;
             return;
         }
+    }
+    if (has_deferred) {
+        s_next = deferred;
+        s_have_next = true;
     }
 }
 
@@ -167,17 +208,19 @@ static void handle_apply(const alert_msg_t *m)
     alert_state_apply(m, clock_now());
 }
 
-static void handle_transition(alert_state_t old_state, alert_state_t s, bool stale)
+/* Log the transition, set the LED, and return the track to play (0 = silent). */
+static int transition_effects(const cmd_t *c, int *repeats)
 {
-    s_base = pattern_for(s);
+    alert_log_record(c->state, c->ts, c->src);
+    s_base = pattern_for(c->state);
     led_set(s_base);
-    int track = notify_track_for(old_state, s, stale);
+    int track = notify_track_for(c->old_state, c->state, c->stale);
     if (track == 0) {
-        ESP_LOGI(TAG, "%s -> %s: silent%s", alert_state_name(old_state), alert_state_name(s),
-                 stale ? " (stale)" : "");
-        return;
+        ESP_LOGI(TAG, "%s -> %s: silent%s", alert_state_name(c->old_state),
+                 alert_state_name(c->state), c->stale ? " (stale)" : "");
     }
-    play(track, s == ALERT_STATE_RED ? CONFIG_AA_SIREN_REPEATS : 1);
+    *repeats = c->state == ALERT_STATE_RED ? CONFIG_AA_SIREN_REPEATS : 1;
+    return track;
 }
 
 /* Idle tick (nothing playing): slow blink while the broker is unreachable
@@ -211,17 +254,22 @@ static void notify_task(void *arg)
 
     cmd_t c;
     for (;;) {
-        if (xQueueReceive(s_q, &c, pdMS_TO_TICKS(1000)) != pdTRUE) {
+        if (s_have_next) {
+            c = s_next;
+            s_have_next = false;
+        } else if (xQueueReceive(s_q, &c, pdMS_TO_TICKS(1000)) != pdTRUE) {
             check_broker();
             continue;
         }
         switch (c.type) {
         case CMD_PLAY:       play(c.track, c.repeats); break;
         case CMD_STOP:       dfplayer_stop(); break;
-        case CMD_TRANSITION:
-            alert_log_record(c.state, c.ts, c.src);
-            handle_transition(c.old_state, c.state, c.stale);
+        case CMD_TRANSITION: {
+            int reps;
+            int t = transition_effects(&c, &reps);
+            if (t) play(t, reps);
             break;
+        }
         case CMD_BUTTON:     handle_button(c.button); break;
         case CMD_APPLY:      handle_apply(&c.msg); break;
         }
