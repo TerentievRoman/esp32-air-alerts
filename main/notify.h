@@ -1,0 +1,11 @@
+#pragma once
+#include "esp_err.h"
+
+/* Sound + LED + buttons in their own task (implemented in Task 8). */
+esp_err_t notify_init(void);
+
+/* Queue a track (1..3) to play once. */
+void notify_play(int track);
+
+/* Stop current playback. */
+void notify_stop(void);
