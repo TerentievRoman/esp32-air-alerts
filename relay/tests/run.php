@@ -38,9 +38,7 @@ $pubNoRetain = mqtt_build_publish('t', '', false, 7);
 expect(ord($pubNoRetain[0]), 0x32, 'PUBLISH without retain');
 expect(substr($pubNoRetain, -2), "\x00\x07", 'PUBLISH packet id 7');
 
-if (file_exists(__DIR__ . '/../map.php')) {
-    require __DIR__ . '/map_tests.php';
-}
+require __DIR__ . '/map_tests.php';
 
 $t = $GLOBALS['__total'];
 $f = $GLOBALS['__fails'];

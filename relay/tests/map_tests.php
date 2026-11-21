@@ -1,0 +1,18 @@
+<?php
+// Тести map_payload_to_state; підключаються з run.php, коли є map.php.
+declare(strict_types=1);
+require_once __DIR__ . '/../map.php';
+
+expect(map_payload_to_state(['status' => 'start']), 'RED', 'status start → RED');
+expect(map_payload_to_state(['status' => 'END']), 'CLEAR', 'status END (регістр) → CLEAR');
+expect(map_payload_to_state(['type' => 'увага']), 'YELLOW', 'type увага → YELLOW');
+expect(map_payload_to_state(['active' => true]), 'RED', 'active true → RED');
+expect(map_payload_to_state(['active' => false]), 'CLEAR', 'active false → CLEAR');
+expect(map_payload_to_state(['foo' => 'bar']), null, 'невідоме поле → null');
+expect(map_payload_to_state([]), null, 'порожній масив → null');
+expect(map_payload_to_state(['State' => 'alert']), 'RED', 'ключ без урахування регістру');
+expect(map_payload_to_state(['event' => 1]), 'RED', 'числове 1 → RED');
+expect(map_payload_to_state(['event' => '0']), 'CLEAR', 'рядкове 0 → CLEAR');
+expect(map_payload_to_state(['action' => 'тривога']), 'RED', 'тривога → RED');
+expect(map_payload_to_state(['alertType' => 'відбій']), 'CLEAR', 'відбій → CLEAR');
+expect(map_payload_to_state(['isActive' => true, 'status' => 'end']), 'CLEAR', 'явне поле status має пріоритет над isActive');
