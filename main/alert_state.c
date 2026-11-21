@@ -72,6 +72,11 @@ bool alert_state_is_stale(const alert_msg_t *m, int64_t now, int64_t max_age_sec
     return now > 0 && now - m->ts > max_age_sec;
 }
 
+bool alert_msg_is_replay(bool retained, int64_t ts, int64_t last_mqtt_ts)
+{
+    return retained && last_mqtt_ts > 0 && ts <= last_mqtt_ts;
+}
+
 alert_msg_t alert_state_last_msg(void) { return s_last; }
 
 void alert_state_set_callback(alert_state_cb_t cb) { s_cb = cb; }

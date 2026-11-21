@@ -31,14 +31,20 @@ static const char *TAG = "air_alert";
 
 static settings_t s_settings;
 
+static void on_time_sync(void)
+{
+    silence_reschedule();
+    mqtt_on_time_sync();
+}
+
 static void on_wifi(bool connected)
 {
     static bool started;
     if (!connected || started) return;
     started = true;
-    clock_init(silence_reschedule);
+    clock_init(on_time_sync);
     silence_init();
-    mqtt_start(&s_settings);
+    if (mqtt_start(&s_settings) != ESP_OK) ESP_LOGE(TAG, "MQTT client failed to start");
 }
 
 static bool reset_requested(void)
@@ -89,6 +95,7 @@ void app_main(void)
         return;
     }
 
+    mqtt_expect();   /* offline LED if Wi-Fi/broker never come up */
     wifi_start_sta(s_settings.wifi_ssid, s_settings.wifi_pass);
     admin_start(&s_settings, false);
     ESP_LOGI(TAG, "started, state=%s", alert_state_name(alert_state_get()));

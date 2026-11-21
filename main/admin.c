@@ -21,7 +21,7 @@
 
 static const char *TAG = "admin";
 
-#define BODY_MAX 1024
+#define BODY_MAX 2048
 #define AP_URL   "http://192.168.4.1/"
 
 static settings_t *s_settings;
@@ -103,12 +103,20 @@ static esp_err_t h_status(httpd_req_t *req)
     return send_json(req, o);
 }
 
-static void take(const char *body, const char *key, char *dst, size_t len, bool keep_if_empty)
+/* Copy a form field into dst. Returns false (and names the field in *bad)
+ * if the decoded value does not fit. */
+static bool take(const char *body, const char *key, char *dst, size_t len, bool keep_if_empty,
+                 const char **bad)
 {
-    char tmp[128];
-    if (!admin_form_field(body, key, tmp, sizeof(tmp))) return;
-    if (keep_if_empty && tmp[0] == '\0') return;
+    char tmp[129];
+    int r = admin_form_field(body, key, tmp, len < sizeof(tmp) ? len : sizeof(tmp));
+    if (r < 0) {
+        *bad = key;
+        return false;
+    }
+    if (r == 0 || (keep_if_empty && tmp[0] == '\0')) return true;
     strlcpy(dst, tmp, len);
+    return true;
 }
 
 static esp_err_t h_save(httpd_req_t *req)
@@ -128,14 +136,20 @@ static esp_err_t h_save(httpd_req_t *req)
     body[got] = '\0';
 
     settings_t n = *s_settings;
-    take(body, "ssid",   n.wifi_ssid,  sizeof(n.wifi_ssid),  false);
-    take(body, "wpass",  n.wifi_pass,  sizeof(n.wifi_pass),  true);
-    take(body, "muri",   n.mqtt_uri,   sizeof(n.mqtt_uri),   false);
-    take(body, "muser",  n.mqtt_user,  sizeof(n.mqtt_user),  false);
-    take(body, "mpass",  n.mqtt_pass,  sizeof(n.mqtt_pass),  true);
-    take(body, "mtopic", n.mqtt_topic, sizeof(n.mqtt_topic), false);
-    take(body, "apass",  n.admin_pass, sizeof(n.admin_pass), true);
+    const char *bad = NULL;
+    bool ok = take(body, "ssid",   n.wifi_ssid,  sizeof(n.wifi_ssid),  false, &bad)
+           && take(body, "wpass",  n.wifi_pass,  sizeof(n.wifi_pass),  true,  &bad)
+           && take(body, "muri",   n.mqtt_uri,   sizeof(n.mqtt_uri),   false, &bad)
+           && take(body, "muser",  n.mqtt_user,  sizeof(n.mqtt_user),  false, &bad)
+           && take(body, "mpass",  n.mqtt_pass,  sizeof(n.mqtt_pass),  true,  &bad)
+           && take(body, "mtopic", n.mqtt_topic, sizeof(n.mqtt_topic), false, &bad)
+           && take(body, "apass",  n.admin_pass, sizeof(n.admin_pass), true,  &bad);
     free(body);
+    if (!ok) {
+        char msg[64];
+        snprintf(msg, sizeof(msg), "Field '%s' is too long, nothing saved", bad);
+        return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, msg);
+    }
 
     if (settings_save(&n) != ESP_OK) return httpd_resp_send_500(req);
     *s_settings = n;

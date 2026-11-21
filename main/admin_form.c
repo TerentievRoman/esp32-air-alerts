@@ -27,24 +27,36 @@ void admin_urldecode(char *s)
     *w = '\0';
 }
 
-bool admin_form_field(const char *body, const char *key, char *out, size_t len)
+int admin_form_field(const char *body, const char *key, char *out, size_t len)
 {
     size_t klen = strlen(key);
     const char *p = body;
     while (p && *p) {
         const char *amp = strchr(p, '&');
-        size_t plen = amp ? (size_t)(amp - p) : strlen(p);
-        if (plen > klen && strncmp(p, key, klen) == 0 && p[klen] == '=') {
-            size_t vlen = plen - klen - 1;
-            if (vlen > len - 1) vlen = len - 1;
-            memcpy(out, p + klen + 1, vlen);
-            out[vlen] = '\0';
-            admin_urldecode(out);
-            return true;
+        const char *end = amp ? amp : p + strlen(p);
+        if ((size_t)(end - p) > klen && strncmp(p, key, klen) == 0 && p[klen] == '=') {
+            /* Decode while copying so the limit applies to the decoded size. */
+            size_t w = 0;
+            for (const char *r = p + klen + 1; r < end; r++) {
+                char c = *r;
+                if (c == '+') {
+                    c = ' ';
+                } else if (c == '%' && r + 2 < end && hexval(r[1]) >= 0 && hexval(r[2]) >= 0) {
+                    c = (char)(hexval(r[1]) << 4 | hexval(r[2]));
+                    r += 2;
+                }
+                if (w + 1 >= len) {
+                    out[0] = '\0';
+                    return -1;
+                }
+                out[w++] = c;
+            }
+            out[w] = '\0';
+            return 1;
         }
         p = amp ? amp + 1 : NULL;
     }
-    return false;
+    return 0;
 }
 
 static void b64_encode(const uint8_t *in, size_t n, char *out)

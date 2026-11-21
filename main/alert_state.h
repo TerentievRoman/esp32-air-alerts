@@ -35,6 +35,10 @@ bool alert_state_is_stale(const alert_msg_t *m, int64_t now, int64_t max_age_sec
 
 void alert_state_set_callback(alert_state_cb_t cb);
 
+/* True for a retained (re-)delivery whose ts is not newer than the last MQTT
+ * message already applied (e.g. resubscribe after a reconnect). */
+bool alert_msg_is_replay(bool retained, int64_t ts, int64_t last_mqtt_ts);
+
 /* Last message that changed the state (valid inside the callback). */
 alert_msg_t alert_state_last_msg(void);
 

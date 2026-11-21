@@ -24,7 +24,7 @@ static const char *TAG = "notify";
 /* DFPlayer may not report track end (e.g. its TX line is not wired): cap each play. */
 #define TRACK_MAX_MS  (6 * 60 * 1000)
 
-typedef enum { CMD_PLAY, CMD_STOP, CMD_TRANSITION, CMD_BUTTON } cmd_type_t;
+typedef enum { CMD_PLAY, CMD_STOP, CMD_TRANSITION, CMD_BUTTON, CMD_APPLY } cmd_type_t;
 
 typedef struct {
     cmd_type_t type;
@@ -36,6 +36,7 @@ typedef struct {
     int64_t ts;             /* CMD_TRANSITION: event time from the message */
     alert_src_t src;        /* CMD_TRANSITION */
     button_id_t button;     /* CMD_BUTTON */
+    alert_msg_t msg;        /* CMD_APPLY */
 } cmd_t;
 
 static QueueHandle_t s_q;
@@ -54,6 +55,11 @@ void notify_play(int track)
 {
     if (track < 1 || track > TRACK_MAX) return;
     post(&(cmd_t){ .type = CMD_PLAY, .track = track, .repeats = 1 });
+}
+
+void notify_apply(const alert_msg_t *m)
+{
+    post(&(cmd_t){ .type = CMD_APPLY, .msg = *m });
 }
 
 void notify_stop(void)
@@ -89,6 +95,7 @@ static led_pattern_t pattern_for(alert_state_t s)
 }
 
 static void handle_button(button_id_t id);
+static void handle_apply(const alert_msg_t *m);
 
 /* Play a track `repeats` times. Returns early on BOOT/stop or when another
  * command is waiting (it preempts the current sound). */
@@ -107,11 +114,12 @@ static void play(int track, int repeats)
             }
             cmd_t next;
             if (xQueuePeek(s_q, &next, 0) != pdTRUE) continue;
-            if (next.type == CMD_BUTTON) {
+            if (next.type == CMD_BUTTON || next.type == CMD_APPLY) {
                 /* Handle now: a state change posts a TRANSITION that preempts
                  * on the next poll; a repeat of the current state does nothing. */
                 xQueueReceive(s_q, &next, 0);
-                handle_button(next.button);
+                if (next.type == CMD_BUTTON) handle_button(next.button);
+                else handle_apply(&next.msg);
                 continue;
             }
             ESP_LOGI(TAG, "preempted");
@@ -133,6 +141,11 @@ static void handle_button(button_id_t id)
     }
     ESP_LOGI(TAG, "local button -> %s", alert_state_name(m.state));
     if (!alert_state_apply(&m, now)) ESP_LOGI(TAG, "already %s", alert_state_name(m.state));
+}
+
+static void handle_apply(const alert_msg_t *m)
+{
+    alert_state_apply(m, clock_now());
 }
 
 static void handle_transition(alert_state_t old_state, alert_state_t s, bool stale)
@@ -191,6 +204,7 @@ static void notify_task(void *arg)
             handle_transition(c.old_state, c.state, c.stale);
             break;
         case CMD_BUTTON:     handle_button(c.button); break;
+        case CMD_APPLY:      handle_apply(&c.msg); break;
         }
     }
 }
@@ -198,7 +212,7 @@ static void notify_task(void *arg)
 esp_err_t notify_init(void)
 {
     alert_log_init();
-    s_q = xQueueCreate(8, sizeof(cmd_t));
+    s_q = xQueueCreate(12, sizeof(cmd_t));
     if (!s_q) return ESP_ERR_NO_MEM;
     alert_state_set_callback(on_state_change);
     button_init(on_button);

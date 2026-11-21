@@ -76,6 +76,19 @@ TEST(parse_sets_src_mqtt) {
     ASSERT_TRUE(alert_state_parse("{\"state\":\"RED\",\"ts\":1}", 0, &m));
     ASSERT_EQ_INT(m.src, 0);
 }
+TEST(retained_replay_not_newer_is_replay) {
+    ASSERT_TRUE(alert_msg_is_replay(true, 1000, 1000));
+    ASSERT_TRUE(alert_msg_is_replay(true, 900, 1000));
+}
+TEST(retained_newer_is_not_replay) {
+    ASSERT_TRUE(!alert_msg_is_replay(true, 1001, 1000));
+}
+TEST(first_message_is_not_replay) {
+    ASSERT_TRUE(!alert_msg_is_replay(true, 5, 0));
+}
+TEST(live_message_is_not_replay) {
+    ASSERT_TRUE(!alert_msg_is_replay(false, 900, 1000));
+}
 TEST(names) {
     ASSERT_EQ_STR(alert_state_name(ALERT_STATE_UNKNOWN), "UNKNOWN");
     ASSERT_EQ_STR(alert_state_name(ALERT_STATE_CLEAR), "CLEAR");
@@ -88,6 +101,7 @@ int main(void) {
     RUN(parse_unknown_state_fails); RUN(parse_missing_ts_fails); RUN(parse_string_ts_fails);
     RUN(parse_garbage_fails); RUN(stale_when_old); RUN(fresh_when_recent);
     RUN(fresh_when_clock_unsynced); RUN(apply_same_state_returns_false);
-    RUN(apply_calls_callback_with_stale); RUN(apply_no_callback_when_unchanged); RUN(last_msg_tracks_applied_message); RUN(parse_sets_src_mqtt); RUN(names);
+    RUN(apply_calls_callback_with_stale); RUN(apply_no_callback_when_unchanged); RUN(last_msg_tracks_applied_message); RUN(parse_sets_src_mqtt); RUN(retained_replay_not_newer_is_replay); RUN(retained_newer_is_not_replay);
+    RUN(first_message_is_not_replay); RUN(live_message_is_not_replay); RUN(names);
     return MT_RESULT();
 }

@@ -18,29 +18,39 @@ TEST(urldecode_bad_escape_kept) {
 }
 TEST(field_found_and_decoded) {
     char out[32];
-    ASSERT_TRUE(admin_form_field("ssid=my+net&wpass=qwerty12%23", "wpass", out, sizeof out));
+    ASSERT_EQ_INT(admin_form_field("ssid=my+net&wpass=qwerty12%23", "wpass", out, sizeof out), 1);
     ASSERT_EQ_STR(out, "qwerty12#");
-    ASSERT_TRUE(admin_form_field("ssid=my+net&wpass=x", "ssid", out, sizeof out));
+    ASSERT_EQ_INT(admin_form_field("ssid=my+net&wpass=x", "ssid", out, sizeof out), 1);
     ASSERT_EQ_STR(out, "my net");
 }
 TEST(field_prefix_not_confused) {
     char out[32];
     /* "pass" must not match "wpass" */
-    ASSERT_TRUE(!admin_form_field("wpass=secret", "pass", out, sizeof out));
+    ASSERT_EQ_INT(admin_form_field("wpass=secret", "pass", out, sizeof out), 0);
 }
 TEST(field_missing) {
     char out[8] = "x";
-    ASSERT_TRUE(!admin_form_field("a=1&b=2", "c", out, sizeof out));
+    ASSERT_EQ_INT(admin_form_field("a=1&b=2", "c", out, sizeof out), 0);
 }
 TEST(field_empty_value) {
     char out[8] = "x";
-    ASSERT_TRUE(admin_form_field("a=&b=2", "a", out, sizeof out));
+    ASSERT_EQ_INT(admin_form_field("a=&b=2", "a", out, sizeof out), 1);
     ASSERT_EQ_STR(out, "");
 }
-TEST(field_truncated_to_buffer) {
+TEST(field_too_long_rejected) {
     char out[4];
-    ASSERT_TRUE(admin_form_field("a=abcdef", "a", out, sizeof out));
-    ASSERT_EQ_STR(out, "abc");
+    ASSERT_EQ_INT(admin_form_field("a=abcdef", "a", out, sizeof out), -1);
+}
+TEST(field_fits_after_decoding) {
+    /* 9 encoded bytes, 3 decoded: must fit a 4-byte buffer */
+    char out[4];
+    ASSERT_EQ_INT(admin_form_field("a=%41%42%43", "a", out, sizeof out), 1);
+    ASSERT_EQ_STR(out, "ABC");
+}
+TEST(field_cyrillic_fits_exactly) {
+    char out[5]; /* "Ки" = 4 bytes UTF-8 + NUL */
+    ASSERT_EQ_INT(admin_form_field("a=%D0%9A%D0%B8", "a", out, sizeof out), 1);
+    ASSERT_EQ_STR(out, "Ки");
 }
 TEST(basic_auth_ok) {
     /* admin:admin */
@@ -62,7 +72,7 @@ TEST(basic_auth_utf8_password) {
 int main(void) {
     RUN(urldecode_plus_and_percent); RUN(urldecode_utf8); RUN(urldecode_bad_escape_kept);
     RUN(field_found_and_decoded); RUN(field_prefix_not_confused); RUN(field_missing);
-    RUN(field_empty_value); RUN(field_truncated_to_buffer);
+    RUN(field_empty_value); RUN(field_too_long_rejected); RUN(field_fits_after_decoding); RUN(field_cyrillic_fits_exactly);
     RUN(basic_auth_ok); RUN(basic_auth_wrong_pass); RUN(basic_auth_missing_or_garbage);
     RUN(basic_auth_utf8_password);
     return MT_RESULT();
