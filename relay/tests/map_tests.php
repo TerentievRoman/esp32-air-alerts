@@ -33,3 +33,15 @@ expect(map_payload_causes($kdAlert), ['drone', 'ballistic'], 'causes extracted')
 expect(map_payload_causes($kdClear), [], 'causes empty on clear');
 expect(map_payload_causes(['status' => 'start']), [], 'causes empty when absent');
 expect(map_payload_causes(['current' => ['state' => 1, 'causes' => 'drone']]), [], 'non-array causes ignored');
+
+// Рівні за Порталом даних Києва: drone → жовтий; missile, massive-drone (і решта) → червоний.
+$kd = fn(array $causes) => ['current' => ['state' => 1, 'causes' => $causes, 'last_cause' => $causes[0] ?? null]];
+expect(map_payload_to_state($kd(['drone'])), 'YELLOW', 'drone only → YELLOW');
+expect(map_payload_to_state($kd(['missile'])), 'RED', 'missile → RED');
+expect(map_payload_to_state($kd(['massive-drone'])), 'RED', 'massive-drone → RED');
+expect(map_payload_to_state($kd(['ballistic'])), 'RED', 'ballistic → RED');
+expect(map_payload_to_state($kd(['mig'])), 'RED', 'mig → RED');
+expect(map_payload_to_state($kd(['missile-drone'])), 'RED', 'missile-drone → RED');
+expect(map_payload_to_state($kd(['drone', 'missile'])), 'RED', 'drone + missile → RED');
+expect(map_payload_to_state($kd([])), 'RED', 'alert without causes → RED (fail-loud)');
+expect(map_payload_to_state(['current' => ['state' => 0, 'causes' => ['drone']]]), 'CLEAR', 'state 0 wins over causes');

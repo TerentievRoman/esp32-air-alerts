@@ -78,8 +78,12 @@ function map_payload_causes(array $payload): array
     return [];
 }
 
+/** Загрози, які Портал даних Києва відносить до жовтого рівня. */
+const MAP_YELLOW_CAUSES = ['drone'];
+
 function map_payload_to_state(array $payload): ?string
 {
+    $causes = map_payload_causes($payload);
     $payload = map_unwrap_current($payload);
     $lower = [];
     foreach ($payload as $k => $v) {
@@ -88,6 +92,10 @@ function map_payload_to_state(array $payload): ?string
     foreach (MAP_STATE_FIELDS as $field) {
         if (array_key_exists($field, $lower)) {
             $state = map_value_to_state($lower[$field]);
+            if ($state === 'RED' && $causes !== []
+                && array_diff(array_map('map_lower', $causes), MAP_YELLOW_CAUSES) === []) {
+                return 'YELLOW';
+            }
             if ($state !== null) {
                 return $state;
             }
