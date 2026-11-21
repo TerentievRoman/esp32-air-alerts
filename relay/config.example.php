@@ -9,7 +9,7 @@ return [
     'topic' => 'air_alert/kyiv/state',
 
     'mqtt' => [
-        'host'    => 'xxxxxxxx.s1.eu.hivemq.cloud',
+        'host'    => 'xxxxxxxx.ala.eu-central-1.emqxsl.com',
         'port'    => 8883,
         'tls'     => true,
         'user'    => 'relay',

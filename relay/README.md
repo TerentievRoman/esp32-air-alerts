@@ -29,8 +29,10 @@
 
 ## Розгортання
 
-1. Створити акаунт брокера (HiveMQ Cloud, безкоштовний тариф) і користувача
-   з правом publish на `air_alert/#`. Записати host, port 8883, логін, пароль.
+1. Брокер: EMQX Cloud Serverless (console: https://cloud-intl.emqx.com/),
+   деплоймент `air-alert`, Access Control → Authentication → користувач
+   `relay`. Записати host (`xxxxxxxx.ala.eu-central-1.emqxsl.com`), port
+   8883, логін, пароль. Spend Limit тримати 0, щоб ніколи не було списань.
 2. Залити теку `relay/` на хостинг як `public_html/air_alert/`
    (без `tests/`, без `config.php` з локальної машини).
 3. На хостингу скопіювати `config.example.php` → `config.php`, вписати
@@ -47,7 +49,7 @@
    Очікувано `{"ok":true,"published":true,"log_writable":true,"map_ok":true,...}`.
    `published:false` з `ms` близько таймауту означає, що хостинг не випускає
    вихідні з'єднання на порт 8883: спитати підтримку або перейти на запасний
-   варіант зі специфікації (брокер із HTTP-API публікації на порту 443).
+   варіант зі специфікації (HTTP-API того ж EMQX на порту 8443).
    `log_writable:false`: дати права на `log/`.
    ```bash
    curl -o /dev/null -w "%{http_code}\n" "https://<домен>/air_alert/hook.php"
