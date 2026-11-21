@@ -1,0 +1,11 @@
+{
+  "idf.currentSetup": "/home/troman/esp/esp-idf",
+  "idf.espIdfPath": "/home/troman/esp/esp-idf",
+  "idf.toolsPath": "/home/troman/.espressif",
+  "idf.pythonInstallPath": "/home/troman/.espressif/python_env/idf6.1_py3.12_env/bin/python3",
+  "idf.port": "/dev/ttyACM0",
+  "idf.flashType": "UART",
+  "idf.openOcdConfigs": ["board/esp32c3-builtin.cfg"],
+  "C_Cpp.default.compileCommands": "${workspaceFolder}/build/compile_commands.json",
+  "files.associations": { "*.h": "c" }
+}
