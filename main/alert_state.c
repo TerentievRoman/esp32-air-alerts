@@ -8,8 +8,13 @@
 static const char *TAG = "alert_state";
 static alert_state_t s_state = ALERT_STATE_UNKNOWN;
 static alert_state_cb_t s_cb;
+static alert_msg_t s_last;
 
-void alert_state_init(void) { s_state = ALERT_STATE_UNKNOWN; }
+void alert_state_init(void)
+{
+    s_state = ALERT_STATE_UNKNOWN;
+    s_last = (alert_msg_t){ 0 };
+}
 
 alert_state_t alert_state_get(void) { return s_state; }
 
@@ -54,6 +59,7 @@ bool alert_state_parse(const char *json, size_t len, alert_msg_t *out)
     if (cJSON_IsString(st) && st->valuestring && state_from_name(st->valuestring, &m.state)
         && cJSON_IsNumber(ts)) {
         m.ts = (int64_t)ts->valuedouble;
+        m.src = ALERT_SRC_MQTT;
         *out = m;
         ok = true;
     }
@@ -66,12 +72,15 @@ bool alert_state_is_stale(const alert_msg_t *m, int64_t now, int64_t max_age_sec
     return now > 0 && now - m->ts > max_age_sec;
 }
 
+alert_msg_t alert_state_last_msg(void) { return s_last; }
+
 void alert_state_set_callback(alert_state_cb_t cb) { s_cb = cb; }
 
 bool alert_state_apply(const alert_msg_t *m, int64_t now)
 {
     alert_state_t old = s_state;
     if (!alert_state_set(m->state)) return false;
+    s_last = *m;
     bool stale = alert_state_is_stale(m, now, CONFIG_AA_STALE_ALERT_SEC);
     if (s_cb) s_cb(old, m->state, stale);
     return true;

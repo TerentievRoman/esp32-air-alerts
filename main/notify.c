@@ -15,6 +15,7 @@
 #include "led.h"
 #include "mqtt.h"
 #include "notify_rules.h"
+#include "alert_log.h"
 
 static const char *TAG = "notify";
 
@@ -32,6 +33,8 @@ typedef struct {
     alert_state_t old_state; /* CMD_TRANSITION */
     alert_state_t state;    /* CMD_TRANSITION */
     bool stale;             /* CMD_TRANSITION */
+    int64_t ts;             /* CMD_TRANSITION: event time from the message */
+    alert_src_t src;        /* CMD_TRANSITION */
     button_id_t button;     /* CMD_BUTTON */
 } cmd_t;
 
@@ -61,7 +64,10 @@ void notify_stop(void)
 
 static void on_state_change(alert_state_t old_state, alert_state_t new_state, bool stale)
 {
-    post(&(cmd_t){ .type = CMD_TRANSITION, .old_state = old_state, .state = new_state, .stale = stale });
+    /* Called synchronously inside alert_state_apply: last_msg is this message. */
+    const alert_msg_t m = alert_state_last_msg();
+    post(&(cmd_t){ .type = CMD_TRANSITION, .old_state = old_state, .state = new_state,
+                   .stale = stale, .ts = m.ts, .src = (alert_src_t)m.src });
 }
 
 /* Runs in the esp_timer task: only flag / enqueue. */
@@ -111,7 +117,7 @@ static void handle_button(button_id_t id)
 {
     /* Local buttons take the same path as MQTT: through alert_state_apply. */
     int64_t now = clock_now();
-    alert_msg_t m = { .ts = now };
+    alert_msg_t m = { .ts = now, .src = ALERT_SRC_LOCAL };
     switch (id) {
     case BTN_ALERT: m.state = ALERT_STATE_RED;   break;
     case BTN_CLEAR: m.state = ALERT_STATE_CLEAR; break;
@@ -172,7 +178,10 @@ static void notify_task(void *arg)
         switch (c.type) {
         case CMD_PLAY:       play(c.track, c.repeats); break;
         case CMD_STOP:       dfplayer_stop(); break;
-        case CMD_TRANSITION: handle_transition(c.old_state, c.state, c.stale); break;
+        case CMD_TRANSITION:
+            alert_log_record(c.state, c.ts, c.src);
+            handle_transition(c.old_state, c.state, c.stale);
+            break;
         case CMD_BUTTON:     handle_button(c.button); break;
         }
     }
@@ -180,6 +189,7 @@ static void notify_task(void *arg)
 
 esp_err_t notify_init(void)
 {
+    alert_log_init();
     s_q = xQueueCreate(8, sizeof(cmd_t));
     if (!s_q) return ESP_ERR_NO_MEM;
     alert_state_set_callback(on_state_change);

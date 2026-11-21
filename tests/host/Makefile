@@ -14,13 +14,16 @@ SRCS_test_alert_state := $(MAIN)/alert_state.c $(CJSON)/cJSON.c
 SRCS_test_admin_form := $(MAIN)/admin_form.c
 SRCS_test_clock := $(MAIN)/clock_calc.c
 SRCS_test_notify_rules := $(MAIN)/notify_rules.c
+SRCS_test_alert_log_buf := $(MAIN)/alert_log_buf.c
 
 .PHONY: test clean
 test: $(addprefix $(BUILD)/,$(TESTS))
 	@rc=0; for t in $^; do echo "== $$t"; ./$$t || rc=1; done; \
 	if [ -z "$^" ]; then echo "no tests"; fi; exit $$rc
 
-$(BUILD)/%: %.c minitest.h
+# Rebuild a test when its own sources or any header in main/ or stubs/ change.
+.SECONDEXPANSION:
+$(BUILD)/%: %.c minitest.h $$(SRCS_$$*) $(wildcard $(MAIN)/*.h) $(wildcard stubs/*.h)
 	@mkdir -p $(BUILD)
 	$(CC) $(CFLAGS) -o $@ $< $(SRCS_$*)
 

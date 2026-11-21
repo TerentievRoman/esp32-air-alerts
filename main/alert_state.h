@@ -12,8 +12,11 @@ typedef enum {
 
 typedef struct {
     alert_state_t state;
-    int64_t ts;                // unix time of the event at the source
+    int64_t ts;                // unix time of the event at the source (0 = unknown)
+    uint8_t src;               // alert_src_t: 0 MQTT, 1 local button
 } alert_msg_t;
+
+typedef enum { ALERT_SRC_MQTT = 0, ALERT_SRC_LOCAL = 1 } alert_src_t;
 
 typedef void (*alert_state_cb_t)(alert_state_t old_state, alert_state_t new_state, bool stale);
 
@@ -31,6 +34,9 @@ bool alert_state_parse(const char *json, size_t len, alert_msg_t *out);
 bool alert_state_is_stale(const alert_msg_t *m, int64_t now, int64_t max_age_sec);
 
 void alert_state_set_callback(alert_state_cb_t cb);
+
+/* Last message that changed the state (valid inside the callback). */
+alert_msg_t alert_state_last_msg(void);
 
 /* Set state from a message; on change call the callback with the stale flag.
  * Returns true if the state changed. */

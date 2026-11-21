@@ -12,6 +12,7 @@
 
 #include "admin_form.h"
 #include "admin_page.h"
+#include "alert_log.h"
 #include "alert_state.h"
 #include "clock.h"
 #include "mqtt.h"
@@ -169,6 +170,31 @@ static esp_err_t h_reset(httpd_req_t *req)
     return ESP_OK;
 }
 
+#define LOG_JSON_MAX 8192
+
+static esp_err_t h_log(httpd_req_t *req)
+{
+    if (!authorized(req)) return ESP_OK;
+    char *buf = malloc(LOG_JSON_MAX);
+    if (!buf) return httpd_resp_send_500(req);
+    int n = alert_log_to_json(buf, LOG_JSON_MAX);
+    if (n < 0) {
+        free(buf);
+        return httpd_resp_send_500(req);
+    }
+    httpd_resp_set_type(req, "application/json");
+    esp_err_t err = httpd_resp_send(req, buf, n);
+    free(buf);
+    return err;
+}
+
+static esp_err_t h_log_clear(httpd_req_t *req)
+{
+    if (!authorized(req)) return ESP_OK;
+    alert_log_clear();
+    return httpd_resp_sendstr(req, "ok");
+}
+
 static esp_err_t h_redirect(httpd_req_t *req)
 {
     httpd_resp_set_status(req, "302 Found");
@@ -202,6 +228,8 @@ esp_err_t admin_start(settings_t *s, bool captive)
         { .uri = "/save",   .method = HTTP_POST, .handler = h_save },
         { .uri = "/test",   .method = HTTP_POST, .handler = h_test },
         { .uri = "/reset",  .method = HTTP_POST, .handler = h_reset },
+        { .uri = "/log",    .method = HTTP_GET,  .handler = h_log },
+        { .uri = "/log/clear", .method = HTTP_POST, .handler = h_log_clear },
     };
     for (size_t i = 0; i < sizeof(routes) / sizeof(routes[0]); i++) {
         httpd_register_uri_handler(srv, &routes[i]);
