@@ -5,3 +5,6 @@ managed_components/
 dependencies.lock
 .vscode/*.log
 *.pyc
+relay/config.php
+relay/log/*.log
+.superpowers/

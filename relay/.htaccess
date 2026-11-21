@@ -1,0 +1,5 @@
+# Закрити прямий доступ до конфігу, логів і тестів.
+<FilesMatch "^(config(\.example)?\.php|mqtt_publish\.php|map\.php)$">
+    Require all denied
+</FilesMatch>
+RedirectMatch 403 ^/.*/(log|tests)/
