@@ -71,4 +71,29 @@ menu "Air Alert"
             default 5000
     endmenu
 
+    menu "LCD Nokia 5110"
+        config AA_LCD_ENABLE
+            bool "Use the Nokia 5110 (PCD8544) LCD"
+            default y
+        config AA_LCD_RST_GPIO
+            int "LCD RST GPIO"
+            default 4
+        config AA_LCD_CE_GPIO
+            int "LCD CE (chip select) GPIO"
+            default 10
+        config AA_LCD_DC_GPIO
+            int "LCD DC (data/command) GPIO"
+            default 5
+        config AA_LCD_DIN_GPIO
+            int "LCD DIN (MOSI) GPIO"
+            default 7
+        config AA_LCD_CLK_GPIO
+            int "LCD CLK GPIO"
+            default 6
+        config AA_LCD_CONTRAST
+            hex "LCD contrast (Vop)"
+            range 0x00 0x7F
+            default 0x3F
+    endmenu
+
 endmenu

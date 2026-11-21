@@ -17,6 +17,7 @@
 #include "button.h"
 #include "clock.h"
 #include "led.h"
+#include "lcd.h" /* TEMP T3 */
 #include "mqtt.h"
 #include "notify.h"
 #include "settings.h"
@@ -73,6 +74,15 @@ void app_main(void)
 
     settings_load(&s_settings);
     led_init();
+    if (lcd_init() == ESP_OK) { /* TEMP T3 */
+        lcd_text(0, 0, "Привіт ҐЄЇІ", false);
+        lcd_text(0, 1, "   ТРИВОГА", true);
+        lcd_text(0, 2, "WiFi SISKI", false);
+        lcd_text(0, 3, "їжак ґанок є", false);
+        lcd_text(0, 4, "0123456789:.-", false);
+        lcd_text(0, 5, "ABCabc ’—°", false);
+        lcd_flush();
+    }
 
     if (reset_requested()) {
         ESP_LOGW(TAG, "settings erased by BOOT hold, restarting");

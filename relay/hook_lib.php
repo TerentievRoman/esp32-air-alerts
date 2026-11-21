@@ -24,7 +24,10 @@ function hook_key_ok(array $cfg, array $get, array $server): bool
         return false;
     }
     // Київ Цифровий шле auth_token як заголовок Authorization (сирим значенням).
-    $auth = $server['HTTP_AUTHORIZATION'] ?? '';
+    // CGI/FastCGI-хостинги не передають його в PHP напряму: .htaccess кладе
+    // його в REDIRECT_HTTP_AUTHORIZATION через SetEnvIf.
+    $auth = $server['HTTP_AUTHORIZATION']
+        ?? ($server['REDIRECT_HTTP_AUTHORIZATION'] ?? ($server['PHP_AUTH_DIGEST'] ?? ''));
     if (is_string($auth) && stripos($auth, 'Bearer ') === 0) {
         $auth = substr($auth, 7);
     }
