@@ -14,6 +14,6 @@ return [
         'tls'     => true,
         'user'    => 'relay',
         'pass'    => 'CHANGE_ME',
-        'timeout' => 5,
+        'timeout' => 3,
     ],
 ];

@@ -64,10 +64,21 @@ expect(hook_handle($cfg, $get, $server, $body, [], $okPublisher, $logDir)[1]['st
 [$get, $server, $body] = req('POST', ['key' => 's3cret'], 'not json');
 expect(hook_handle($cfg, $get, $server, $body, ['active' => 'false'], $okPublisher, $logDir)[1]['state'] ?? null, 'CLEAR', 'form POST fallback');
 
+// Секрет у заголовку Authorization (так його шле Київ Цифровий), сирий і з Bearer.
+[$get, $server, $body] = req('POST', [], '{"current":{"state":1,"causes":["mig"]}}', ['Authorization' => 's3cret']);
+[$code, $resp] = hook_handle($cfg, $get, $server, $body, [], $okPublisher, $logDir);
+expect($code, 200, 'raw Authorization header accepted');
+expect(end($published)[1]['causes'] ?? null, ['mig'], 'causes forwarded in payload');
+[$get, $server, $body] = req('POST', [], '{"current":{"state":0,"causes":[]}}', ['Authorization' => 'Bearer s3cret']);
+expect(hook_handle($cfg, $get, $server, $body, [], $okPublisher, $logDir)[0], 200, 'Bearer Authorization header accepted');
+expect(end($published)[1]['causes'] ?? null, [], 'empty causes on clear');
+[$get, $server, $body] = req('POST', [], '{"current":{"state":1}}', ['Authorization' => 'Bearer wrong']);
+expect(hook_handle($cfg, $get, $server, $body, [], $okPublisher, $logDir)[0], 403, 'wrong Bearer → 403');
+
 // Лог: один рядок на запит, результат дописано, секрет відсутній, ≤ 4096 байт.
 $log = file_get_contents(glob("$logDir/*.log")[0]);
 $lines = array_filter(explode("\n", $log));
-expect(count($lines), 7, 'one log line per authorized request (403s excluded)');
+expect(count($lines), 9, 'one log line per authorized request (403s excluded)');
 expect(strpos($log, 's3cret'), false, 'secret never logged');
 expect(preg_match('/-> RED published/', $log) === 1, true, 'log records published result');
 expect(preg_match('/-> unmapped/', $log) === 1, true, 'log records unmapped');

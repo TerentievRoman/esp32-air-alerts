@@ -23,7 +23,12 @@ function hook_key_ok(array $cfg, array $get, array $server): bool
     if ($secret === '' || $secret === 'CHANGE_ME') {
         return false;
     }
-    $given = $get['key'] ?? ($server['HTTP_X_RELAY_KEY'] ?? '');
+    // Київ Цифровий шле auth_token як заголовок Authorization (сирим значенням).
+    $auth = $server['HTTP_AUTHORIZATION'] ?? '';
+    if (is_string($auth) && stripos($auth, 'Bearer ') === 0) {
+        $auth = substr($auth, 7);
+    }
+    $given = $get['key'] ?? ($server['HTTP_X_RELAY_KEY'] ?? $auth);
     return is_string($given) && hash_equals($secret, $given);
 }
 
@@ -83,13 +88,19 @@ function hook_handle($cfg, array $get, array $server, string $body, array $post,
         return [403, ['ok' => false]];
     }
 
-    $state = map_payload_to_state(hook_parse_payload($body, $get, $post));
+    $payload = hook_parse_payload($body, $get, $post);
+    $state = map_payload_to_state($payload);
     if ($state === null) {
         hook_log_write($logDir, hook_log_line($get, $server, $body, 'unmapped'));
         return [202, ['ok' => false, 'reason' => 'unmapped']];
     }
 
-    $msg = json_encode(['state' => $state, 'ts' => time(), 'src' => 'kyiv_webhook']);
+    $msg = json_encode([
+        'state' => $state,
+        'ts' => time(),
+        'src' => 'kyiv_webhook',
+        'causes' => map_payload_causes($payload),
+    ]);
     if (!$publish($cfg['mqtt'], (string)$cfg['topic'], $msg, true)) {
         hook_log_write($logDir, hook_log_line($get, $server, $body, 'publish failed'));
         error_log('hook: publish failed');

@@ -52,8 +52,35 @@ function map_value_to_state($value): ?string
     return null;
 }
 
+/**
+ * Київ Цифровий (kyiv.digital/open-api): {"current":{"state":0|1,"causes":[...]},"stats":{...}}.
+ * Повертає вкладений об'єкт current, якщо він є, інакше сам payload.
+ */
+function map_unwrap_current(array $payload): array
+{
+    foreach ($payload as $k => $v) {
+        if (map_lower((string)$k) === 'current' && is_array($v)) {
+            return $v;
+        }
+    }
+    return $payload;
+}
+
+/** Список активних загроз (drone, mig, missile, ballistic, ...) або []. */
+function map_payload_causes(array $payload): array
+{
+    $cur = map_unwrap_current($payload);
+    foreach ($cur as $k => $v) {
+        if (map_lower((string)$k) === 'causes') {
+            return is_array($v) ? array_values(array_filter($v, 'is_string')) : [];
+        }
+    }
+    return [];
+}
+
 function map_payload_to_state(array $payload): ?string
 {
+    $payload = map_unwrap_current($payload);
     $lower = [];
     foreach ($payload as $k => $v) {
         $lower[map_lower((string)$k)] = $v;
