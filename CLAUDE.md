@@ -1,0 +1,76 @@
+# air_alert — інструкція для Claude
+
+Прошивка на ESP-IDF v6.1.1 для ESP32-C3 SuperMini: сповіщувач повітряної
+тривоги в Києві. Проєктне рішення: `docs/superpowers/specs/2026-11-21-air-alert-mqtt-design.md`.
+План реалізації: `docs/superpowers/plans/`. Читай спочатку їх.
+
+## Збірка, прошивка, монітор
+
+```bash
+. ~/esp/esp-idf/export.sh          # один раз на термінал (alias get_idf)
+idf.py build
+idf.py -p /dev/ttyACM0 flash monitor   # Ctrl+] вихід з монітора
+idf.py menuconfig                      # розділ "Air Alert"
+```
+
+Порт `/dev/ttyACM0` (native USB). Якщо порту немає: затиснути BOOT,
+натиснути RESET, відпустити BOOT. Користувач має бути в групі `dialout`.
+Перед тим як казати «готово», обов'язково `idf.py build` без помилок і
+без нових warning-ів у `main/`.
+
+## Залізо та піни
+
+| Що | GPIO | Примітка |
+|---|---|---|
+| LED вбудований | 8 | active-low (0 = світить) |
+| Кнопка BOOT | 9 | active-low, підтяжка вгору |
+| DFPlayer RX | 1 (ESP TX) | через резистор 1 кОм |
+| DFPlayer TX | 0 (ESP RX) | |
+| DFPlayer VCC | 5V | живлення з USB |
+
+DFPlayer Mini HW-247, UART1 9600 8N1, вихід DAC на активні колонки.
+GPIO 0/1 зайняті UART-ом, GPIO 18/19 це USB, не чіпати. Усі піни та
+параметри задаються в `main/Kconfig.projbuild`, не хардкодити в .c.
+
+## SD-картка DFPlayer
+
+DFPlayer грає трек за порядком запису у FAT, не за ім'ям. Картку
+форматувати в FAT32, файли з `sounds/` копіювати **по одному, в порядку
+номерів**, щоб трек N = файл `0N_*.mp3`:
+
+1. `01_yellow.mp3` увага
+2. `02_red.mp3` повітряна тривога
+3. `03_clear.mp3` відбій
+4. `04_silence.mp3` хвилина мовчання (метроном 60 с)
+
+## Структура прошивки (`main/`)
+
+- `main.c` тільки NVS + старт модулів. Нічого блокуючого в `app_main`.
+- `alert_state.*` стан CLEAR/YELLOW/RED/UNKNOWN + callback на зміну.
+- `wifi.*` STA з креденшалами з NVS, автореконект; AP-режим для адмінки.
+- `admin.*` esp_http_server, одна HTML-сторінка в `admin_page.h`
+  (вбудована як рядок), captive portal в AP.
+- `mqtt.*` esp-mqtt поверх TLS (бандл сертифікатів), підписка на стан.
+- `notify.*` окрема задача: DFPlayer, LED, кнопка, хвилина мовчання.
+- `dfplayer.*` драйвер DFPlayer, написаний користувачем. API не міняти.
+- `settings.*` обгортка NVS: читання/запис налаштувань, дефолти з Kconfig.
+
+Кожен модуль: `xxx_init()`, свій `TAG` для логів, помилки через `esp_err_t`.
+Один модуль = одна пара файлів. Логи `ESP_LOGI` на події, `ESP_LOGD` на
+дрібниці. Коментарі українською або англійською, без змішування в одному
+файлі.
+
+## Ретранслятор (`relay/`)
+
+PHP для shared-хостингу без composer і демонів. `config.php` у .gitignore,
+`config.example.php` у репозиторії. Жодних секретів у коді та комітах.
+
+## Робочий процес
+
+- Малі коміти по одному етапу плану, повідомлення англійською в
+  наказовому способі, тіло українською за потреби.
+- Не комітити `sdkconfig`, `build/`, `relay/config.php`, `relay/log/`.
+- Перевірка MQTT без вебхука: `mosquitto_pub -h HOST -p 8883 --capath
+  /etc/ssl/certs -u USER -P PASS -t air_alert/kyiv/state -r -m
+  '{"state":"RED","ts":0,"src":"manual"}'`.
+- Перевірка адмінки: `curl -u admin:PASS http://<ip>/`.
