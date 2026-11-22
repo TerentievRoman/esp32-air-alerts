@@ -18,5 +18,9 @@ void notify_apply(const alert_msg_t *m);
 void notify_stop(void);
 
 /* Play `track` (1..3) at `vol` (0..30) for 10 s, then stop and restore the
- * scheduled volume. false if a sound is playing now (nothing queued). */
+ * scheduled volume. A running test is replaced by the new one. false if a
+ * real sound is playing now (nothing queued). */
 bool notify_test_volume(int track, int vol);
+
+/* Stop a running volume test early. Real sounds are not affected. */
+void notify_stop_test(void);

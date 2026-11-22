@@ -48,6 +48,7 @@ static led_pattern_t s_base = LED_OFF; /* LED pattern of the current alert state
 static bool s_broker_lost;
 static volatile bool s_stop_req;
 static volatile bool s_playing;
+static volatile bool s_testing;  /* the sound playing now is a volume test */
 static int s_cur_vol = -1;   /* last volume sent to DFPlayer */
 
 /* --- producers (any context) --- */
@@ -66,9 +67,14 @@ void notify_play(int track)
 bool notify_test_volume(int track, int vol)
 {
     if (track < 1 || track > TRACK_MAX || vol < 0 || vol > VOLUME_MAX) return false;
-    if (s_playing) return false;
+    if (s_playing && !s_testing) return false;
     post(&(cmd_t){ .type = CMD_TEST, .track = track, .repeats = 1, .vol = vol });
     return true;
+}
+
+void notify_stop_test(void)
+{
+    if (s_testing) s_stop_req = true;
 }
 
 void notify_apply(const alert_msg_t *m)
@@ -153,6 +159,7 @@ static void apply_volume(int v)
 static void play(int track, int repeats, int test_vol)
 {
     s_playing = true;
+    s_testing = test_vol >= 0;
     play_body(track, repeats, test_vol);
     if (test_vol >= 0) {
         /* Test over for any reason: silence it and go back to the schedule. */
@@ -162,6 +169,7 @@ static void play(int track, int repeats, int test_vol)
         }
         /* else: an interrupting sound already stopped the player and sets its own volume */
     }
+    s_testing = false;
     s_playing = false;
 }
 
@@ -189,7 +197,8 @@ static void play_body(int track, int repeats, int test_vol)
         for (int waited = 0; waited < limit_ms; waited += POLL_MS) {
             if (dfplayer_wait_finished(POLL_MS)) break;
             if (s_stop_req) {
-                ESP_LOGI(TAG, "stopped by button%s", has_deferred ? ", deferred sound dropped" : "");
+                ESP_LOGI(TAG, "%s%s", test ? "volume test stopped" : "stopped by button",
+                         has_deferred ? ", deferred sound dropped" : "");
                 dfplayer_stop();
                 return;
             }

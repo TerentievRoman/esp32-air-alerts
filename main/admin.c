@@ -246,6 +246,13 @@ static esp_err_t h_volume_test(httpd_req_t *req)
     return httpd_resp_sendstr(req, "ok");
 }
 
+static esp_err_t h_volume_test_stop(httpd_req_t *req)
+{
+    if (!authorized(req)) return ESP_OK;
+    notify_stop_test();
+    return httpd_resp_sendstr(req, "ok");
+}
+
 static esp_err_t h_reset(httpd_req_t *req)
 {
     if (!authorized(req)) return ESP_OK;
@@ -319,6 +326,7 @@ esp_err_t admin_start(settings_t *s, bool captive)
         { .uri = "/volume", .method = HTTP_GET,  .handler = h_volume_get },
         { .uri = "/volume", .method = HTTP_POST, .handler = h_volume_set },
         { .uri = "/volume/test", .method = HTTP_POST, .handler = h_volume_test },
+        { .uri = "/volume/test/stop", .method = HTTP_POST, .handler = h_volume_test_stop },
     };
     for (size_t i = 0; i < sizeof(routes) / sizeof(routes[0]); i++) {
         httpd_register_uri_handler(srv, &routes[i]);
