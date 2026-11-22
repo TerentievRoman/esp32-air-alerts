@@ -32,8 +32,8 @@ menu "Air Alert"
             int "Seconds without broker before LED shows connection loss"
             default 60
         config AA_STALE_ALERT_SEC
-            int "Retained alert older than this (s) is stale: LED only, no siren"
-            default 10800
+            int "Alert that started longer ago than this (s) is stale: LED only, no siren"
+            default 300
     endmenu
 
     menu "Pins"
