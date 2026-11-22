@@ -87,3 +87,13 @@ esp_err_t alert_log_clear(void)
     ESP_LOGW(TAG, "cleared");
     return err;
 }
+
+bool alert_log_last(alert_log_entry_t *out)
+{
+    if (!s_lock) return false;
+    xSemaphoreTake(s_lock, portMAX_DELAY);
+    bool have = s_buf.count > 0;
+    if (have) *out = s_buf.e[s_buf.count - 1];
+    xSemaphoreGive(s_lock);
+    return have;
+}
