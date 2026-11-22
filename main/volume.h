@@ -25,3 +25,9 @@ bool volume_sched_from_json(const char *txt, volume_sched_t *out, char *err, siz
 
 /* {"default":N,"max":64,"rules":[...]} with "HH:MM" strings; malloc'ed, caller frees. */
 char *volume_sched_to_json(const volume_sched_t *s);
+
+/* Storage and live volume, volume.c */
+esp_err_t volume_init(void);                   /* load NVS "aa"/"vsched"; bad/missing -> {def=CONFIG_AA_DF_VOLUME, n=0} */
+int       volume_now(void);                    /* volume_at(current, clock_now()) under mutex */
+void      volume_get(volume_sched_t *out);     /* copy under mutex */
+esp_err_t volume_set(const volume_sched_t *s); /* invalid -> ESP_ERR_INVALID_ARG; NVS then RAM */

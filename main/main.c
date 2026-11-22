@@ -21,6 +21,7 @@
 #include "notify.h"
 #include "settings.h"
 #include "silence.h"
+#include "volume.h"
 #include "wifi.h"
 
 static const char *TAG = "air_alert";
@@ -81,6 +82,7 @@ void app_main(void)
     }
 
     alert_state_init();
+    ESP_ERROR_CHECK(volume_init());   /* before notify: its task reads the volume */
     ESP_ERROR_CHECK(notify_init());   /* DFPlayer, LED patterns, BOOT gestures, alert log */
     ESP_ERROR_CHECK(wifi_init(on_wifi));
 

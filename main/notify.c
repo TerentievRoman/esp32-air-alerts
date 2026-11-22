@@ -15,6 +15,7 @@
 #include "led.h"
 #include "mqtt.h"
 #include "notify_rules.h"
+#include "volume.h"
 #include "alert_log.h"
 
 static const char *TAG = "notify";
@@ -44,6 +45,7 @@ static led_pattern_t s_base = LED_OFF; /* LED pattern of the current alert state
 static bool s_broker_lost;
 static volatile bool s_stop_req;
 static volatile bool s_playing;
+static int s_cur_vol = -1;   /* last volume sent to DFPlayer */
 
 /* --- producers (any context) --- */
 
@@ -117,6 +119,15 @@ static bool s_have_next;
  * s_next. Other commands are handled while playing. */
 static void play_body(int track, int repeats);
 
+/* Send the volume to DFPlayer only when it differs from the current one. */
+static void apply_volume(int v)
+{
+    if (v == s_cur_vol) return;
+    ESP_LOGI(TAG, "volume %d", v);
+    dfplayer_set_volume(v);
+    s_cur_vol = v;
+}
+
 static void play(int track, int repeats)
 {
     s_playing = true;
@@ -131,13 +142,20 @@ static void play_body(int track, int repeats)
     bool has_deferred = false;   /* last sound that may not interrupt this one */
     for (int r = 0; r < repeats; r++) {
         ESP_LOGI(TAG, "play track %d (%d/%d)", track, r + 1, repeats);
+        apply_volume(volume_now());
         dfplayer_play_track(track);
+        int64_t minute = clock_now() / 60;
         for (int waited = 0; waited < TRACK_MAX_MS; waited += POLL_MS) {
             if (dfplayer_wait_finished(POLL_MS)) break;
             if (s_stop_req) {
                 ESP_LOGI(TAG, "stopped by button%s", has_deferred ? ", deferred sound dropped" : "");
                 dfplayer_stop();
                 return;
+            }
+            int64_t m = clock_now() / 60;
+            if (m != minute) {
+                minute = m;
+                apply_volume(volume_now());
             }
             cmd_t next;
             if (xQueueReceive(s_q, &next, 0) != pdTRUE) continue;
@@ -250,7 +268,7 @@ static void notify_task(void *arg)
         ESP_LOGE(TAG, "DFPlayer not ready: check SD card and wiring");
         led_set(LED_BLINK_2HZ);
     }
-    dfplayer_set_volume(CONFIG_AA_DF_VOLUME);
+    apply_volume(volume_now());
 
     cmd_t c;
     for (;;) {
