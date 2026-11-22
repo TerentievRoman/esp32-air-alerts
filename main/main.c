@@ -19,6 +19,7 @@
 #include "led.h"
 #include "mqtt.h"
 #include "notify.h"
+#include "screen.h"
 #include "settings.h"
 #include "silence.h"
 #include "wifi.h"
@@ -91,6 +92,7 @@ void app_main(void)
         ESP_LOGW(TAG, "no Wi-Fi configured: setup AP '%s'", ssid);
         wifi_start_ap(ssid, CONFIG_AA_AP_PASS);
         admin_start(&s_settings, true);
+        screen_start(NULL, ssid);
         led_set(LED_BLINK_2HZ);
         return;
     }
@@ -98,5 +100,6 @@ void app_main(void)
     mqtt_expect();   /* offline LED if Wi-Fi/broker never come up */
     wifi_start_sta(s_settings.wifi_ssid, s_settings.wifi_pass);
     admin_start(&s_settings, false);
+    screen_start(s_settings.wifi_ssid, NULL);
     ESP_LOGI(TAG, "started, state=%s", alert_state_name(alert_state_get()));
 }
