@@ -65,7 +65,7 @@ void notify_play(int track)
 
 bool notify_test_volume(int track, int vol)
 {
-    if (track < 1 || track > TRACK_MAX || vol < 0 || vol > 30) return false;
+    if (track < 1 || track > TRACK_MAX || vol < 0 || vol > VOLUME_MAX) return false;
     if (s_playing) return false;
     post(&(cmd_t){ .type = CMD_TEST, .track = track, .repeats = 1, .vol = vol });
     return true;
@@ -132,15 +132,22 @@ static bool s_have_next;
  * TEST_PLAY_MS, no schedule changes, any new sound interrupts it. */
 static void play_body(int track, int repeats, int test_vol);
 
-/* Send the volume to DFPlayer only when it differs from the current one.
- * The cached value changes only when the send succeeded, so a failure is
- * retried on the next call. */
-static void apply_volume(int v)
+/* Send the volume to DFPlayer unconditionally. DFPlayer has no ACK, so the
+ * cache may lie after a DFPlayer reset or a failed init. The cached value
+ * changes only when the send succeeded. */
+static void send_volume(int v)
 {
-    if (v == s_cur_vol) return;
     ESP_LOGI(TAG, "volume %d", v);
     if (dfplayer_set_volume(v) == ESP_OK) s_cur_vol = v;
     else ESP_LOGW(TAG, "set volume %d failed", v);
+}
+
+/* Send the volume only when it differs from the cached one (cheap periodic
+ * check); a failure is retried on the next call. */
+static void apply_volume(int v)
+{
+    if (v == s_cur_vol) return;
+    send_volume(v);
 }
 
 static void play(int track, int repeats, int test_vol)
@@ -149,8 +156,11 @@ static void play(int track, int repeats, int test_vol)
     play_body(track, repeats, test_vol);
     if (test_vol >= 0) {
         /* Test over for any reason: silence it and go back to the schedule. */
-        dfplayer_stop();
-        apply_volume(volume_now());
+        if (!s_have_next) {
+            dfplayer_stop();
+            apply_volume(volume_now());
+        }
+        /* else: an interrupting sound already stopped the player and sets its own volume */
     }
     s_playing = false;
 }
@@ -172,7 +182,7 @@ static void play_body(int track, int repeats, int test_vol)
                 s_cur_vol = -1;   /* unknown: force a re-send on restore */
             }
         } else {
-            apply_volume(volume_now());
+            send_volume(volume_now());
         }
         dfplayer_play_track(track);
         int64_t minute = clock_now() / 60;

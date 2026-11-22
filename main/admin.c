@@ -225,8 +225,15 @@ static esp_err_t h_volume_test(httpd_req_t *req)
     char q[32], v[8];
     int track = 0, vol = -1;
     if (httpd_req_get_url_query_str(req, q, sizeof(q)) == ESP_OK) {
-        if (httpd_query_key_value(q, "track", v, sizeof(v)) == ESP_OK) track = atoi(v);
-        if (httpd_query_key_value(q, "vol", v, sizeof(v)) == ESP_OK) vol = atoi(v);
+        char *end;
+        if (httpd_query_key_value(q, "track", v, sizeof(v)) == ESP_OK) {
+            long n = strtol(v, &end, 10);
+            if (end != v && *end == '\0') track = (int)n;
+        }
+        if (httpd_query_key_value(q, "vol", v, sizeof(v)) == ESP_OK) {
+            long n = strtol(v, &end, 10);
+            if (end != v && *end == '\0') vol = (int)n;
+        }
     }
     if (track < 1 || track > 3 || vol < 0 || vol > VOLUME_MAX) {
         return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "track 1..3, vol 0..30");
@@ -294,6 +301,7 @@ esp_err_t admin_start(settings_t *s, bool captive)
 
     httpd_config_t cfg = HTTPD_DEFAULT_CONFIG();
     cfg.max_uri_handlers = 16;
+    cfg.stack_size = 6144;   /* POST /volume holds several ~514-byte schedule copies plus cJSON/NVS */
     cfg.lru_purge_enable = true;
     httpd_handle_t srv = NULL;
     esp_err_t err = httpd_start(&srv, &cfg);

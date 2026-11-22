@@ -54,8 +54,10 @@ esp_err_t volume_init(void)
                 ESP_LOGW(TAG, "stored schedule unusable, using default");
             }
         } else if (err != ESP_ERR_NVS_NOT_FOUND) {
-            ESP_LOGW(TAG, "stored schedule unusable, using default");
+            ESP_LOGW(TAG, "nvs_get_blob failed: %s, using default", esp_err_to_name(err));
         }
+    } else if (err != ESP_ERR_NVS_NOT_FOUND) {
+        ESP_LOGW(TAG, "nvs_open failed: %s, using default", esp_err_to_name(err));
     }
 
     xSemaphoreTake(s_mtx, portMAX_DELAY);
