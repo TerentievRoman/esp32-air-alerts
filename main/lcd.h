@@ -6,6 +6,10 @@
 #define LCD_WIDTH  84
 #define LCD_HEIGHT 48
 
+/* Hold the controller in reset right after power-up (PCD8544 needs RES low
+ * soon after VDD rises). Call first thing in app_main; lcd_init releases it. */
+void lcd_preinit(void);
+
 esp_err_t lcd_init(void);
 
 /* Draw into the frame buffer; call lcd_flush() to show it. */
