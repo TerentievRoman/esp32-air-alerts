@@ -28,6 +28,19 @@ static esp_err_t send(bool data, const uint8_t *buf, size_t len)
 
 static esp_err_t cmd(uint8_t c) { return send(false, &c, 1); }
 
+void lcd_preinit(void)
+{
+#if CONFIG_AA_LCD_ENABLE
+    gpio_set_level(CONFIG_AA_LCD_RST_GPIO, 0);
+    const gpio_config_t io = {
+        .pin_bit_mask = 1ULL << CONFIG_AA_LCD_RST_GPIO,
+        .mode = GPIO_MODE_OUTPUT,
+    };
+    gpio_config(&io);
+    gpio_set_level(CONFIG_AA_LCD_RST_GPIO, 0);
+#endif
+}
+
 esp_err_t lcd_init(void)
 {
     const gpio_config_t io = {

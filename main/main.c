@@ -16,6 +16,7 @@
 #include "alert_state.h"
 #include "button.h"
 #include "clock.h"
+#include "lcd.h"
 #include "led.h"
 #include "mqtt.h"
 #include "notify.h"
@@ -65,6 +66,8 @@ static bool reset_requested(void)
 
 void app_main(void)
 {
+    lcd_preinit();   /* keep the LCD in reset until screen_start */
+
     esp_err_t ret = nvs_flash_init();
     if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
         ESP_ERROR_CHECK(nvs_flash_erase());
