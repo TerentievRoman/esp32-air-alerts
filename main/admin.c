@@ -17,6 +17,7 @@
 #include "clock.h"
 #include "mqtt.h"
 #include "notify.h"
+#include "volume.h"
 #include "wifi.h"
 
 static const char *TAG = "admin";
@@ -100,6 +101,7 @@ static esp_err_t h_status(httpd_req_t *req)
     cJSON_AddBoolToObject(o, "mqtt", mqtt_is_connected());
     cJSON_AddBoolToObject(o, "time_synced", clock_is_synced());
     cJSON_AddStringToObject(o, "id", id);
+    cJSON_AddNumberToObject(o, "volume", volume_now());
     return send_json(req, o);
 }
 
@@ -175,6 +177,68 @@ static esp_err_t h_test(httpd_req_t *req)
     return httpd_resp_sendstr(req, "ok");
 }
 
+static esp_err_t h_volume_get(httpd_req_t *req)
+{
+    if (!authorized(req)) return ESP_OK;
+    volume_sched_t s;
+    volume_get(&s);
+    char *txt = volume_sched_to_json(&s);
+    if (!txt) return httpd_resp_send_500(req);
+    httpd_resp_set_type(req, "application/json");
+    esp_err_t err = httpd_resp_sendstr(req, txt);
+    free(txt);
+    return err;
+}
+
+static esp_err_t h_volume_set(httpd_req_t *req)
+{
+    if (!authorized(req)) return ESP_OK;
+    if (req->content_len == 0 || req->content_len >= VOLUME_JSON_MAX) {
+        return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "bad body");
+    }
+    char *body = malloc(VOLUME_JSON_MAX);
+    if (!body) return httpd_resp_send_500(req);
+    int got = 0;
+    while (got < (int)req->content_len) {
+        int r = httpd_req_recv(req, body + got, req->content_len - got);
+        if (r <= 0) { free(body); return ESP_FAIL; }
+        got += r;
+    }
+    body[got] = '\0';
+
+    volume_sched_t s;
+    char err[128];
+    bool ok = volume_sched_from_json(body, &s, err, sizeof(err));
+    free(body);
+    if (!ok) {
+        httpd_resp_set_status(req, "400 Bad Request");
+        httpd_resp_set_type(req, "text/plain; charset=utf-8");
+        return httpd_resp_sendstr(req, err);
+    }
+    if (volume_set(&s) != ESP_OK) return httpd_resp_send_500(req);
+    return httpd_resp_sendstr(req, "ok");
+}
+
+static esp_err_t h_volume_test(httpd_req_t *req)
+{
+    if (!authorized(req)) return ESP_OK;
+    char q[32], v[8];
+    int track = 0, vol = -1;
+    if (httpd_req_get_url_query_str(req, q, sizeof(q)) == ESP_OK) {
+        if (httpd_query_key_value(q, "track", v, sizeof(v)) == ESP_OK) track = atoi(v);
+        if (httpd_query_key_value(q, "vol", v, sizeof(v)) == ESP_OK) vol = atoi(v);
+    }
+    if (track < 1 || track > 3 || vol < 0 || vol > VOLUME_MAX) {
+        return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "track 1..3, vol 0..30");
+    }
+    if (!notify_test_volume(track, vol)) {
+        httpd_resp_set_status(req, "409 Conflict");
+        httpd_resp_set_type(req, "text/plain; charset=utf-8");
+        return httpd_resp_sendstr(req, "Зараз грає звук");
+    }
+    return httpd_resp_sendstr(req, "ok");
+}
+
 static esp_err_t h_reset(httpd_req_t *req)
 {
     if (!authorized(req)) return ESP_OK;
@@ -244,6 +308,9 @@ esp_err_t admin_start(settings_t *s, bool captive)
         { .uri = "/reset",  .method = HTTP_POST, .handler = h_reset },
         { .uri = "/log",    .method = HTTP_GET,  .handler = h_log },
         { .uri = "/log/clear", .method = HTTP_POST, .handler = h_log_clear },
+        { .uri = "/volume", .method = HTTP_GET,  .handler = h_volume_get },
+        { .uri = "/volume", .method = HTTP_POST, .handler = h_volume_set },
+        { .uri = "/volume/test", .method = HTTP_POST, .handler = h_volume_test },
     };
     for (size_t i = 0; i < sizeof(routes) / sizeof(routes[0]); i++) {
         httpd_register_uri_handler(srv, &routes[i]);
