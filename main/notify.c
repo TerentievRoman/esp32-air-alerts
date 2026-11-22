@@ -24,13 +24,16 @@ static const char *TAG = "notify";
 #define POLL_MS       200
 /* DFPlayer may not report track end (e.g. its TX line is not wired): cap each play. */
 #define TRACK_MAX_MS  (6 * 60 * 1000)
+/* Volume test: play this long, then stop. */
+#define TEST_PLAY_MS  10000
 
-typedef enum { CMD_PLAY, CMD_STOP, CMD_TRANSITION, CMD_BUTTON, CMD_APPLY } cmd_type_t;
+typedef enum { CMD_PLAY, CMD_STOP, CMD_TRANSITION, CMD_BUTTON, CMD_APPLY, CMD_TEST } cmd_type_t;
 
 typedef struct {
     cmd_type_t type;
     int track;              /* CMD_PLAY */
     int repeats;            /* CMD_PLAY */
+    int vol;                /* CMD_TEST */
     alert_state_t old_state; /* CMD_TRANSITION */
     alert_state_t state;    /* CMD_TRANSITION */
     bool stale;             /* CMD_TRANSITION */
@@ -58,6 +61,14 @@ void notify_play(int track)
 {
     if (track < 1 || track > TRACK_MAX) return;
     post(&(cmd_t){ .type = CMD_PLAY, .track = track, .repeats = 1 });
+}
+
+bool notify_test_volume(int track, int vol)
+{
+    if (track < 1 || track > TRACK_MAX || vol < 0 || vol > 30) return false;
+    if (s_playing) return false;
+    post(&(cmd_t){ .type = CMD_TEST, .track = track, .repeats = 1, .vol = vol });
+    return true;
 }
 
 void notify_apply(const alert_msg_t *m)
@@ -116,36 +127,56 @@ static bool s_have_next;
 
 /* Play a track `repeats` times. Returns early on BOOT/stop, or when a new
  * sound may interrupt this one (notify_can_preempt); it is then queued in
- * s_next. Other commands are handled while playing. */
-static void play_body(int track, int repeats);
+ * s_next. Other commands are handled while playing.
+ * test_vol >= 0: volume test at that volume (repeats must be 1): limited to
+ * TEST_PLAY_MS, no schedule changes, any new sound interrupts it. */
+static void play_body(int track, int repeats, int test_vol);
 
-/* Send the volume to DFPlayer only when it differs from the current one. */
+/* Send the volume to DFPlayer only when it differs from the current one.
+ * The cached value changes only when the send succeeded, so a failure is
+ * retried on the next call. */
 static void apply_volume(int v)
 {
     if (v == s_cur_vol) return;
     ESP_LOGI(TAG, "volume %d", v);
-    dfplayer_set_volume(v);
-    s_cur_vol = v;
+    if (dfplayer_set_volume(v) == ESP_OK) s_cur_vol = v;
+    else ESP_LOGW(TAG, "set volume %d failed", v);
 }
 
-static void play(int track, int repeats)
+static void play(int track, int repeats, int test_vol)
 {
     s_playing = true;
-    play_body(track, repeats);
+    play_body(track, repeats, test_vol);
+    if (test_vol >= 0) {
+        /* Test over for any reason: silence it and go back to the schedule. */
+        dfplayer_stop();
+        apply_volume(volume_now());
+    }
     s_playing = false;
 }
 
-static void play_body(int track, int repeats)
+static void play_body(int track, int repeats, int test_vol)
 {
+    const bool test = test_vol >= 0;
+    const int limit_ms = test ? TEST_PLAY_MS : TRACK_MAX_MS;
     s_stop_req = false;
     cmd_t deferred = { 0 };
     bool has_deferred = false;   /* last sound that may not interrupt this one */
     for (int r = 0; r < repeats; r++) {
         ESP_LOGI(TAG, "play track %d (%d/%d)", track, r + 1, repeats);
-        apply_volume(volume_now());
+        if (test) {
+            ESP_LOGI(TAG, "volume test: %d", test_vol);
+            if (dfplayer_set_volume(test_vol) == ESP_OK) s_cur_vol = test_vol;
+            else {
+                ESP_LOGW(TAG, "set volume %d failed", test_vol);
+                s_cur_vol = -1;   /* unknown: force a re-send on restore */
+            }
+        } else {
+            apply_volume(volume_now());
+        }
         dfplayer_play_track(track);
         int64_t minute = clock_now() / 60;
-        for (int waited = 0; waited < TRACK_MAX_MS; waited += POLL_MS) {
+        for (int waited = 0; waited < limit_ms; waited += POLL_MS) {
             if (dfplayer_wait_finished(POLL_MS)) break;
             if (s_stop_req) {
                 ESP_LOGI(TAG, "stopped by button%s", has_deferred ? ", deferred sound dropped" : "");
@@ -153,7 +184,7 @@ static void play_body(int track, int repeats)
                 return;
             }
             int64_t m = clock_now() / 60;
-            if (m != minute) {
+            if (!test && m != minute) {
                 minute = m;
                 apply_volume(volume_now());
             }
@@ -161,6 +192,7 @@ static void play_body(int track, int repeats)
             if (xQueueReceive(s_q, &next, 0) != pdTRUE) continue;
 
             int next_track = 0, next_repeats = 1;
+            cmd_t follow = { 0 };   /* what s_next gets if this sound is interrupted */
             switch (next.type) {
             case CMD_BUTTON: handle_button(next.button); continue;
             case CMD_APPLY:  handle_apply(&next.msg);    continue;
@@ -176,6 +208,26 @@ static void play_body(int track, int repeats)
                 next_track = next.track;
                 next_repeats = next.repeats;
                 break;
+            case CMD_TEST:
+                if (!test) {
+                    ESP_LOGI(TAG, "volume test ignored: sound playing");
+                    continue;
+                }
+                next_track = next.track;
+                follow = next;
+                break;
+            }
+            if (follow.type != CMD_TEST) {
+                follow = (cmd_t){ .type = CMD_PLAY, .track = next_track, .repeats = next_repeats };
+            }
+            if (test) {
+                /* Any new sound ends the test without the interruption rules. */
+                if (next_track == 0) continue;
+                ESP_LOGI(TAG, "track %d interrupts volume test", next_track);
+                dfplayer_stop();
+                s_next = follow;
+                s_have_next = true;
+                return;
             }
             if (next_track == 0) {
                 /* A newer silent transition cancels a deferred sound. */
@@ -196,7 +248,7 @@ static void play_body(int track, int repeats)
             }
             ESP_LOGI(TAG, "track %d interrupts track %d", next_track, track);
             dfplayer_stop();
-            s_next = (cmd_t){ .type = CMD_PLAY, .track = next_track, .repeats = next_repeats };
+            s_next = follow;
             s_have_next = true;
             return;
         }
@@ -280,12 +332,13 @@ static void notify_task(void *arg)
             continue;
         }
         switch (c.type) {
-        case CMD_PLAY:       play(c.track, c.repeats); break;
+        case CMD_PLAY:       play(c.track, c.repeats, -1); break;
+        case CMD_TEST:       play(c.track, 1, c.vol); break;
         case CMD_STOP:       dfplayer_stop(); break;
         case CMD_TRANSITION: {
             int reps;
             int t = transition_effects(&c, &reps);
-            if (t) play(t, reps);
+            if (t) play(t, reps, -1);
             break;
         }
         case CMD_BUTTON:     handle_button(c.button); break;
