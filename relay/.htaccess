@@ -1,3 +1,20 @@
+# Передати заголовок Authorization у PHP (CGI/FastCGI його зрізає): Київ
+# Цифровий надсилає секрет вебхука саме в ньому.
+<IfModule mod_setenvif.c>
+    SetEnvIf Authorization "(.+)" HTTP_AUTHORIZATION=$1
+</IfModule>
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteCond %{HTTP:Authorization} .
+    RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+</IfModule>
+<IfModule mod_cgi.c>
+    CGIPassAuth On
+</IfModule>
+<IfModule mod_proxy_fcgi.c>
+    CGIPassAuth On
+</IfModule>
+
 # Закрити прямий доступ до конфігу, бібліотек, логів і тестів.
 # Працює і на Apache 2.4 (mod_authz_core), і на 2.2 (mod_authz_host).
 <FilesMatch "^(config(\.example)?\.php|mqtt_publish\.php|map\.php|hook_lib\.php)$|\.log$">

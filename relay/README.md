@@ -74,6 +74,39 @@
    задати заголовок, краще передавати його як `X-Relay-Key` і реєструвати
    URL без `?key=`. Секрет міняти, якщо логи доступу комусь передавались.
 
+## Заголовок Authorization на shared-хостингу
+
+Київ Цифровий передає `auth_token` у заголовку `Authorization`. CGI/FastCGI
+зазвичай не віддає його PHP, тому `.htaccess` перекладає його в
+`REDIRECT_HTTP_AUTHORIZATION` (`SetEnvIf` + `RewriteRule`, плюс
+`CGIPassAuth On` де є). Перевірка після заливки:
+
+```bash
+curl -o /dev/null -w "%{http_code}\n" -X POST https://<домен>/hook.php \
+  -H "Authorization: <secret>" -H 'Content-Type: application/json' \
+  -d '{"current":{"state":0,"causes":[]}}'
+```
+
+Очікувано `200`. Якщо `403`, хостинг не пропускає заголовок навіть через
+`.htaccess`: тоді реєструвати вебхук без `auth_token` і з ключем у URL
+(`hook.php?key=<secret>`).
+
+## Реєстрація вебхука в Київ Цифровому
+
+Токен API видають після запиту на https://kyiv.digital/open-api/register
+(вхід через id.gov.ua). Зберігати в `config.php` як `kyiv_api_token`.
+
+```bash
+curl -X POST https://kyiv.digital/open-api/webhooks \
+  -H "Authorization: Bearer <API_TOKEN>" -H "Accept: application/json" \
+  -H "Content-Type: application/json" \
+  -d '{"url":"https://<домен>/hook.php","auth_token":"<secret>"}'
+curl https://kyiv.digital/open-api/webhooks -H "Authorization: Bearer <API_TOKEN>" -H "Accept: application/json"
+```
+
+Після 5 невдалих доставок поспіль ендпоінт вимикається (`disabled_at`):
+видалити `DELETE /webhooks/<id>` і зареєструвати знову.
+
 ## Відповіді hook.php
 
 | Код | Коли |

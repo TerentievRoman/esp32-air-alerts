@@ -75,10 +75,16 @@ expect(end($published)[1]['causes'] ?? null, [], 'empty causes on clear');
 [$get, $server, $body] = req('POST', [], '{"current":{"state":1}}', ['Authorization' => 'Bearer wrong']);
 expect(hook_handle($cfg, $get, $server, $body, [], $okPublisher, $logDir)[0], 403, 'wrong Bearer → 403');
 
+// Apache/CGI часто віддає заголовок як REDIRECT_HTTP_AUTHORIZATION (через SetEnvIf у .htaccess).
+[$get, $server, $body] = req('POST', [], '{"current":{"state":1,"causes":["drone"]}}');
+$server['REDIRECT_HTTP_AUTHORIZATION'] = 's3cret';
+expect(hook_handle($cfg, $get, $server, $body, [], $okPublisher, $logDir)[0], 200, 'REDIRECT_HTTP_AUTHORIZATION accepted');
+expect(end($published)[1]['state'] ?? null, 'YELLOW', 'drone-only real payload → YELLOW');
+
 // Лог: один рядок на запит, результат дописано, секрет відсутній, ≤ 4096 байт.
 $log = file_get_contents(glob("$logDir/*.log")[0]);
 $lines = array_filter(explode("\n", $log));
-expect(count($lines), 9, 'one log line per authorized request (403s excluded)');
+expect(count($lines), 10, 'one log line per authorized request (403s excluded)');
 expect(strpos($log, 's3cret'), false, 'secret never logged');
 expect(preg_match('/-> RED published/', $log) === 1, true, 'log records published result');
 expect(preg_match('/-> unmapped/', $log) === 1, true, 'log records unmapped');
